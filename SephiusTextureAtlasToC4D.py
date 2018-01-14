@@ -20,6 +20,14 @@ TextureBiggerSize = 1024
 
 Csample = ""
 
+def get_all_objects(op, filter, output):
+    while op:
+        if filter(op):
+            output.append(op)
+        get_all_objects(op.GetDown(), filter, output)
+        op = op.GetNext()
+    return output
+
 def getChildren(parent):
     PChildren = []
     nextObject = parent.GetDown()
