@@ -11,6 +11,8 @@ XMLpath = ""
 FileName = ""
 folderPath = ""
 
+objectTypesCounts = {}
+
 def get_all_objects(op, filter, output):
     while op:
         if filter(op):
@@ -89,17 +91,20 @@ def setUserDataFromNode(cObject, node):
 
     
 def CreateElementContainer(node, keys, name, parent):
+    print "------------------------------------------------------"
+    print "Processing: ", node, keys, name, parent
+    print "------------------------------------------------------"
     
     FinalContainer = ""
     
-    if name == "LevelRegion":
+    if node.tag == "LevelRegion":
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 2
         CContainer[c4d.NULLOBJECT_RADIUS] = 600
         CContainer[c4d.NULLOBJECT_ORIENTATION] = 0
         FinalContainer = CContainer
         
-    elif name.split("_")[0] == "Bases":
+    elif node.tag == "Bases":
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 4
         CContainer[c4d.NULLOBJECT_RADIUS] = 100
@@ -108,7 +113,7 @@ def CreateElementContainer(node, keys, name, parent):
         
         for node2 in node.iter("Base"): 
             CSubContainer = c4d.BaseObject(c4d.Onull)
-            CSubContainer.SetName("Base" + node2.get("globalID"))
+            CSubContainer.SetName("Base." + node2.get("globalID"))
             CSubContainer[c4d.NULLOBJECT_DISPLAY] = 4
             CSubContainer[c4d.NULLOBJECT_RADIUS] = 250
             CSubContainer[c4d.NULLOBJECT_ORIENTATION] = 1
@@ -123,11 +128,11 @@ def CreateElementContainer(node, keys, name, parent):
             
         FinalContainer = CContainer
     
-    elif name.find("Map") != -1:
-        print "Map Index: ", name.find("Map")
+    elif node.tag.find("Map") != -1:
+
         CContainer = c4d.BaseObject(c4d.Oplane)
         CContainer[c4d.PRIM_AXIS] = 0
-        print node
+
         CContainer[c4d.PRIM_PLANE_HEIGHT] = float(node.get("mapWidth"))#Plane is rotated cause this way is easier to match vetex index ordr
         CContainer[c4d.PRIM_PLANE_WIDTH] = float(node.get("mapHeight"))
         CContainer[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_X] = -3.14 * 0.5
@@ -240,6 +245,12 @@ def CreateElementContainer(node, keys, name, parent):
         MapMaterial[c4d.MATERIAL_USE_REFLECTION] = False
         MapMaterial[c4d.MATERIAL_USE_COLOR] = False
         MapMaterial[c4d.MATERIAL_USE_LUMINANCE] = True
+        MapMaterial[c4d.MATERIAL_USE_ALPHA] = True
+        
+        if name.split("_")[0] == "AreaMap":
+            MapMaterial[c4d.MATERIAL_LUMINANCE_COLOR] = c4d.Vector(0, 0.12, 1)
+        else:
+            MapMaterial[c4d.MATERIAL_LUMINANCE_COLOR] = c4d.Vector(0, 0.9, 1)
         MapMaterial.Message( c4d.MSG_UPDATE )
         MapMaterial.Update( True, True )
         doc.InsertMaterial(MapMaterial)
@@ -253,7 +264,13 @@ def CreateElementContainer(node, keys, name, parent):
         MShaderD[c4d.SLA_DIRTY_VMAP_OBJECT] = CTag
         MapMaterial.InsertShader( MShaderD )
         MapMaterial[c4d.MATERIAL_LUMINANCE_SHADER]  = MShaderD
+        MapMaterial[c4d.MATERIAL_LUMINANCE_TEXTUREMIXING] = 2
         
+        MShaderD = c4d.BaseList2D(c4d.Xcolor)
+        MShaderD[c4d.COLORSHADER_COLOR] = c4d.Vector(0.33, 0.33, 0.33)
+        MapMaterial.InsertShader( MShaderD )
+        MapMaterial[c4d.MATERIAL_ALPHA_SHADER]  = MShaderD
+
         MapMaterial.Message( c4d.MSG_UPDATE )
         MapMaterial.Update( True, True )
         
@@ -262,30 +279,139 @@ def CreateElementContainer(node, keys, name, parent):
             
         c4d.EventAdd()
         
-    elif name.split("_")[0] == "LevelBackground":
+    elif node.tag == "LevelBackground":
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 3
         CContainer[c4d.NULLOBJECT_RADIUS] = 200
         CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
         FinalContainer = CContainer
         
-    elif name.split("_")[0] == "LevelSite":
+    elif node.tag == "LevelSite":
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 12
         CContainer[c4d.NULLOBJECT_RADIUS] = 50
         CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
-        FinalContainer = CContainer
-          
         
-    FinalContainer.SetName(name)
+        for node2 in node.iter("LevelArea"):
+            CreateElementContainer(node2, node2.attrib.keys(), node2.tag + "." + node2.get("globalId"), CContainer)
+             
+        FinalContainer = CContainer
+        
+    elif node.tag == "LevelArea":
+        #Get Area Bound from string coming as: "(x=A, y=B, w=C, h=D)"
+        boundsStrX = float(node.get("bounds")[1:-1].split(",")[0].split("=")[1])
+        boundsStrY = float(node.get("bounds")[1:-1].split(",")[1].split("=")[1])
+        boundsStrW = float(node.get("bounds")[1:-1].split(",")[2].split("=")[1])
+        boundsStrH = float(node.get("bounds")[1:-1].split(",")[3].split("=")[1])
+        boundRatio =  boundsStrW / boundsStrH
+        
+        print "Bounds: ", boundsStrX, boundsStrX, boundsStrW, boundsStrH 
+        
+        CContainer = c4d.BaseObject(c4d.Onull)
+        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+        CContainer[c4d.NULLOBJECT_RADIUS] = 300
+        CContainer[c4d.NULLOBJECT_ASPECTRATIO] = 1
+        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+        CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
+        CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
     
-    setUserDataFromNode(FinalContainer, node)
-     
-    #Inser the Container to the doccument
+        CBounds = c4d.BaseObject(c4d.Osplinerectangle)
+        CBounds.SetName("Bounds." + name)
+        CBounds[c4d.PRIM_RECTANGLE_WIDTH] = boundsStrW
+        CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = boundsStrH
+        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = boundsStrX + (boundsStrW * .5) - float(node.get("x"))
+        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -boundsStrY - (boundsStrH * .5) + float(node.get("y"))
+        
+        CBounds.InsertUnder(CContainer)  
+        
+        for subNode in node:
+            SubNomeName = subNode.get('name')
+            if not SubNomeName:
+                SubNomeName = ""
+            else:
+                SubNomeName = "." + SubNomeName
+                
+            CContainer.SetName(name)
+            CreateElementContainer(subNode, subNode.attrib.keys(), subNode.tag + SubNomeName, CContainer)
+        
+        FinalContainer = CContainer
+    elif parent.GetName().split(".")[0] == "LevelArea":#Game Objects
+        CContainer = c4d.BaseObject(c4d.Onull)
+        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+        CContainer[c4d.NULLOBJECT_RADIUS] = 200
+        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+        
+        GObjectType = node.tag
+        
+        if GObjectType in objectTypesCounts.keys():
+            objectTypesCounts[GObjectType] = objectTypesCounts[GObjectType] + 1
+        else:
+             objectTypesCounts[GObjectType] = 1
+        print GObjectType, objectTypesCounts[GObjectType]
+        GObjectName = GObjectType + "." + str(objectTypesCounts[GObjectType])
+        CContainer.SetName(GObjectName)
+        
+        #Some objects was stored with it´s properties inside a sub element. We need to joint thoses properties with the object node itself
+        for paramsNode in node.iter("CustomParams"):
+            for attiName in paramsNode.attrib.keys():
+                node.set(attiName, paramsNode.get(attiName))
+                
+        for viewNode in node.iter("View"):
+            for attiName in viewNode.attrib.keys():
+                node.set(attiName, viewNode.get(attiName))
+
+        if node.get("group"):
+            CGName = "Group" + "." + node.get("group")
+            CGroupContainer = getChild(parent, CGName)
+       
+            if not CGroupContainer:
+                CGroupContainer = c4d.BaseObject(c4d.Onull)
+                
+                CGroupContainer.SetName(CGName)
+                CGroupContainer[c4d.NULLOBJECT_DISPLAY] = 3
+                CGroupContainer[c4d.NULLOBJECT_RADIUS] = 100
+                CGroupContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+                CGroupContainer.InsertUnder(parent)
+                print CGroupContainer
+    
+            CContainer.InsertUnder(CGroupContainer)
+        
+        for viewNode in node.iter("View"):
+            for containerNode in viewNode:
+                CreateElementContainer(containerNode, containerNode.attrib.keys(), containerNode.get('name'), CContainer)
+            
+        CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
+        CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
+            
+        FinalContainer = CContainer
+        
+    elif parent.GetName().split(".")[0] == "GameSprite":#Sprite Containers
+        CContainer = c4d.BaseObject(c4d.Onull)
+        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+        CContainer[c4d.NULLOBJECT_RADIUS] = 200
+        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+        FinalContainer = CContainer
+           
+    else:
+        CContainer = c4d.BaseObject(c4d.Onull)
+        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+        CContainer[c4d.NULLOBJECT_RADIUS] = 200
+        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+        FinalContainer = CContainer
+        
     if parent != None:
-        #print FinalContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X], parent
-        FinalContainer.InsertUnder(parent)  
-        doc.AddUndo(c4d.UNDOTYPE_NEW, FinalContainer) 
+       print parent  
+         
+    setUserDataFromNode(FinalContainer, node)
+    
+    if parent != None:
+        if parent.GetName().split(".")[0] != "LevelArea":
+            FinalContainer.SetName(name)
+        #Inser the Container to the doccument
+        if not FinalContainer.GetUp():
+            #print FinalContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X], parent
+            FinalContainer.InsertUnder(parent)  
+            doc.AddUndo(c4d.UNDOTYPE_NEW, FinalContainer) 
     return FinalContainer
 
 def main():
@@ -327,7 +453,9 @@ def main():
     doc.StartUndo()
 
     for node in tree.iter("LevelRegion"): 
+        objectTypesCounts = {}
         LevelRegionContainer = CreateElementContainer(node, node.attrib.keys(), node.tag, None)
+        LevelRegionContainer.SetName(node.get('name'))
         #Inser the Container to the doccument
         doc.InsertObject(LevelRegionContainer)  
         doc.AddUndo(c4d.UNDOTYPE_NEW, LevelRegionContainer) 
@@ -339,7 +467,7 @@ def main():
             if not SubNomeName:
                 SubNomeName = ""
             else:
-                SubNomeName = "_" + SubNomeName
+                SubNomeName = "." + SubNomeName
                 
             CreateElementContainer(subNode, subNode.attrib.keys(), subNode.tag + SubNomeName, LevelRegionContainer)
             
