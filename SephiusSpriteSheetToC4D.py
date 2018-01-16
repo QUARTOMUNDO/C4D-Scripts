@@ -19,7 +19,85 @@ TextureSizeRatio = 1
 TextureBiggerSize = 1024
 
 Csample = ""
+SamplesContainer = ""
 
+def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, AtlasHeight):
+    #print "Getting Atlas Sizes: ", AtlasWidth, AtlasHeight
+    #AtlasWidth =  float(TextureNode.attrib.get("width"))
+    AtlasHalfWidth = AtlasWidth * 0.5
+    #AtlasHeight = float(TextureNode.attrib.get("height"))
+    AtlasHalfHeight = AtlasHeight * 0.5
+
+    CHalfWidth = float(TextureNode.attrib.get("width")) * 0.5
+    CHalfHeight = float(TextureNode.attrib.get("height")) * 0.5
+    
+    HasFrmeInfo = bool(TextureNode.attrib.get("frameX"))
+    if HasFrmeInfo:
+        CDIFFX = -float(TextureNode.attrib.get("frameX")) - (float(TextureNode.attrib.get("frameWidth"))  - float(TextureNode.attrib.get("width")))
+        CDIFFY = float(TextureNode.attrib.get("frameY")) + (float(TextureNode.attrib.get("frameHeight")) - float(TextureNode.attrib.get("height")))
+        diff = c4d.Vector(CDIFFX * 0.5, CDIFFY * 0.5, 0)
+        CoDiff = c4d.Vector(0, 0, 0)
+    else:
+        diff = c4d.Vector(0, 0, 0)
+        CoDiff = c4d.Vector(0, 0, 0)
+    
+    CX = float(TextureNode.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
+    CY = -float(TextureNode.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
+    CPX = -float(TextureNode.attrib.get("width")) * 0.5
+    CPY = float(TextureNode.attrib.get("height")) * 0.5
+    CPW = float(TextureNode.attrib.get("width")) * 0.5
+    CPH = -float(TextureNode.attrib.get("height")) * 0.5
+    
+    pX = CPX
+    pY = CPY
+    hX = CPW
+    hY = CPH
+    
+    PSs = []
+    PSs.append(c4d.Vector(pX, pY, 0) + diff)
+    PSs.append(c4d.Vector(hX, pY, 0) + diff)
+    PSs.append(c4d.Vector(hX, hY, 0) + diff)
+    PSs.append(c4d.Vector(pX, hY, 0) + diff)           
+    
+    if not Polygon:
+        Polygon = c4d.CPolygon(0, 1, 2, 3)
+        Polygon.__init__(0, 1, 2, 3)
+        CObject.ResizeObject(4, 1)
+        CObject.SetPolygon(0, Polygon)
+   
+    pcount = CObject.GetPointCount()
+    point = CObject.GetAllPoints()
+    for i in xrange(pcount):
+        CObject.SetPoint(i, PSs[i])
+        
+    #Update object. Need to update bound box for selection and etc.
+    CObject.Message (c4d.MSG_UPDATE)
+    
+    #print "UV Coord px: ", float(TextureNode.attrib.get("x")), float(TextureNode.attrib.get("y")), float(TextureNode.attrib.get("width")), float(TextureNode.attrib.get("height"))
+    CoX = float(TextureNode.attrib.get("x")) / AtlasWidth
+    CoY = float(TextureNode.attrib.get("y")) / AtlasHeight
+    CoHX = (float(TextureNode.attrib.get("x")) + float(TextureNode.attrib.get("width"))) / AtlasWidth
+    CoHY = (float(TextureNode.attrib.get("y")) + float(TextureNode.attrib.get("height"))) / AtlasHeight
+    
+    #print "Atlas: ", AtlasWidth, AtlasHeight
+    #print "UVW: ", CoX, CoY, CoHX, CoHY
+    
+    PCSs = []
+    PCSs.append(c4d.Vector(CoX, CoY, 0) + CoDiff)
+    PCSs.append(c4d.Vector(CoHX, CoY, 0) + CoDiff)
+    PCSs.append(c4d.Vector(CoHX, CoHY, 0) + CoDiff)
+    PCSs.append(c4d.Vector(CoX, CoHY, 0) + CoDiff) 
+              
+    if not UVWTag:
+        UVWTag = CObject.MakeVariableTag(c4d.Tuvw, 1)
+        UVWTag[c4d.ID_BASELIST_NAME] = "SampleUVW"
+        
+    UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
+    
+    if CObject.GetUp().GetName() == ParentName:
+        CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - diff 
+
+    
 #Return true if object has a user data name and value is equal to desired
 def UserDataCheck(CObject, UDName, Value):
     for id, bc in CObject.GetUserDataContainer():
@@ -138,7 +216,8 @@ def main():
         AtlasHeight = float(node.attrib.get("height"))
         AtlasHalfHeight = AtlasHeight * 0.5
         PNGpath = folderPath + node.attrib.get("imagePath")
-        
+        #print "Setting Atlas Sizes: ", AtlasWidth, AtlasHeight
+
         if AtlasWidth >= AtlasHeight:
             TextureBiggerSize = AtlasHeight
         else:
@@ -186,23 +265,11 @@ def main():
         element = SamplesContainer.AddUserData(bc)
         SamplesContainer[element] = ""
  
-        #bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BUTTON) # Create Atlas Name Data
-        #bc[c4d.DESC_NAME] = "Reload Atlas"
-        #bc[c4d.DESC_PARENTGROUP] = Celement
-        #bc[c4d.DESC_CUSTOMGUI] = c4d.CUSTOMGUI_BUTTON
-        #element = SamplesContainer.AddUserData(bc)
- 
         Cbc2 = c4d.BaseContainer(c4d.DTYPE_GROUP) # Create Group
         Cbc2[c4d.DESC_NAME] = "Resolution"
         Cbc2[c4d.DESC_SHORT_NAME] = "Res"
         Cbc2[c4d.DESC_PARENTGROUP] = Celement
-        #Cbc2[c4d.DESC_TITLEBAR] = False
-        #Cbc2[c4d.DESC_LAYOUTGROUP] = True
-        #Cbc2[c4d.DESC_LAYOUTVERSION] = 0
         Cbc2[c4d.DESC_COLUMNS] = 2
-        #Cbc2[c4d.DESC_COLUMNSMATED] = 3
-        #Cbc2[c4d.DESC_NOGUISWITCH] = False
-        #Cbc2[c4d.DESC_GUIOPEN] = True
  
         C2element = SamplesContainer.AddUserData(Cbc2)
         SamplesContainer[C2element] = "Resolution"
@@ -241,20 +308,7 @@ def main():
         doc.AddUndo(c4d.UNDOTYPE_NEW, InstancesContainer)  
  
     InstancesContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = AtlasHalfWidth * 2 + 200
-    #InstancesContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = 0
-    #InstancesContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
  
-    #Create Camera to be used for mapping texture
-    cameraProject = doc.SearchObject(FileName + " CameraProject")
-    if not cameraProject:
-        cameraProject = c4d.BaseObject(c4d.Ocamera)
-        cameraProject.SetName(FileName + " CameraProject")
-        cameraProject[c4d.CAMERA_PROJECTION] = 4  #Caution, this index could change on future C4D versions. Option should be "Front"
-        cameraProject.InsertUnder(SamplesContainer)
-        doc.AddUndo(c4d.UNDOTYPE_NEW, cameraProject)
-     
-    cameraProject.SetZoom(TextureSizeRatio)
-     
     # Verify if Material already Exist
     AtlasMaterial = doc.SearchMaterial(FileName + " Material")
     print AtlasMaterial
@@ -269,14 +323,26 @@ def main():
     AtlasMaterial[c4d.MATERIAL_COLOR_SHADER]  = MShaderD
      
     # Create Material or Update the Existing one
-    MShaderA = c4d.BaseList2D(c4d.Xbitmap)
-    MShaderA[c4d.BITMAPSHADER_FILENAME]  = folderPath + FileName + ".png"
     AtlasMaterial[c4d.MATERIAL_USE_ALPHA] = True
     AtlasMaterial[c4d.MATERIAL_USE_REFLECTION] = False
     AtlasMaterial[c4d.MATERIAL_PREVIEWSIZE] = 13
+    AtlasMaterial[c4d.MATERIAL_USE_TRANSPARENCY] = True
+    AtlasMaterial[c4d.MATERIAL_TRANSPARENCY_BRIGHTNESS] = 0
+    
+    MShaderA = c4d.BaseList2D(c4d.Xbitmap)
+    MShaderA[c4d.BITMAPSHADER_FILENAME]  = folderPath + FileName + ".png"
+    
+    LayerSet = c4d.LayerSet()
+    LayerSet.SetMode(c4d.LAYERSETMODE_LAYERALPHA)
+    MShaderA[c4d.BITMAPSHADER_LAYERSET] = LayerSet
+    MShaderA[c4d.BITMAPSHADER_BLACKPOINT] = 1
+    MShaderA[c4d.BITMAPSHADER_WHITEPOINT] = 0
+
     AtlasMaterial.InsertShader( MShaderA )
-    AtlasMaterial[c4d.MATERIAL_ALPHA_SHADER] = MShaderA
- 
+    AtlasMaterial[c4d.MATERIAL_TRANSPARENCY_SHADER] = MShaderA
+    
+    MVCTag = None
+     
     AtlasMaterial.Message( c4d.MSG_UPDATE )
     AtlasMaterial.Update( True, True )
     doc.InsertMaterial(AtlasMaterial)
@@ -291,10 +357,11 @@ def main():
         MissingMaterial.Message( c4d.MSG_UPDATE )
         MissingMaterial.Update( True, True )
         doc.InsertMaterial(MissingMaterial)
-         
+        
+    #print "Sample List USer Data: ", SamplesContainer[c4d.ID_USERDATA,4]     
     AtlasSamplesList = (SamplesContainer[c4d.ID_USERDATA,4]).split(",")
     AtlasSamplesList.pop()
-    print "Sample List: ", AtlasSamplesList
+    #print "Sample List: ", AtlasSamplesList
     SamplesContainer[c4d.ID_USERDATA,4] = ""
      
     #Create the Samples
@@ -303,77 +370,44 @@ def main():
         CHalfWidth = float(node.attrib.get("width")) * 0.5
         CHalfHeight = float(node.attrib.get("height")) * 0.5
         
-        CX = float(node.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
-        CY = -float(node.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
-        CPX = -float(node.attrib.get("width")) * 0.5
-        CPY = float(node.attrib.get("height")) * 0.5
-        CPW = float(node.attrib.get("width")) * 0.5
-        CPH = -float(node.attrib.get("height")) * 0.5
-        
-        HasFrmeInfo = bool(node.attrib.get("frameX"))
-        if HasFrmeInfo:
+        HasFrameInfo = bool(node.attrib.get("frameX"))
+        if HasFrameInfo:
             CDIFFX = -float(node.attrib.get("frameX")) - (float(node.attrib.get("frameWidth"))  - float(node.attrib.get("width")))
             CDIFFY = float(node.attrib.get("frameY")) + (float(node.attrib.get("frameHeight")) - float(node.attrib.get("height")))
             diff = c4d.Vector(CDIFFX * 0.5, CDIFFY * 0.5, 0)
         else:
-            diffX = 0
-            diffY = 0
             diff = c4d.Vector(0, 0, 0)
-              
+
         Csample = False
         
         hasExistingSamples = False
         #Updating Actual Samples:...
         for Csample in get_all_objects(doc.GetFirstObject(), lambda x:UserDataAndNameCheck(x, currenName + "_Sample", "IsSpriteSheetSample", True), []):
-            print "hasExistingSamples: ", hasExistingSamples, currenName, Csample.GetName()
             hasExistingSamples = True
-            #Update Code
-            Csample.KillTag(c4d.Ttexture)
-            Csample.KillTag(c4d.Tuvw)
-             
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = CX
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = CY
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-             
-            pX = CPX
-            PY = CPY
-            hX = CPW
-            hY = CPH
-             
-            PSs = []
-            PSs.append(c4d.Vector(hX, PY, 0) + diff)
-            PSs.append(c4d.Vector(pX, PY, 0) + diff)
-            PSs.append(c4d.Vector(hX, hY, 0) + diff)           
-            PSs.append(c4d.Vector(pX, hY, 0) + diff)
-             
-            pcount = Csample.GetPointCount()
-            point = Csample.GetAllPoints()
-            for i in xrange(pcount):
-                Csample.SetPoint(i, PSs[i])
-             
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - diff   
-            #Update object. Need to update bound box for selection and etc.
-            Csample.Message (c4d.MSG_UPDATE) 
-             
-            #Create a Texture Tag and use Camera Mapping to reproduce Atlas Subtexture coordinates
-            CTag = Csample.MakeTag(c4d.Ttexture)
-            CTag[c4d.TEXTURETAG_PROJECTION] = 8 #Caution, this index could change on future C4D versions. Option should be "Camera Mapping"
-            CTag[c4d.TEXTURETAG_CAMERA_FILMASPECT] = AtlasWidth/AtlasHeight
-            CTag[c4d.TEXTURETAG_CAMERA] = cameraProject
-            CTag[c4d.TEXTURETAG_MATERIAL] = AtlasMaterial
-         
-            #Create a UVW Tag with the created mapping from above. So object can be moved without have UVW mapping spoiled
-            CTTag = c4d.utils.GenerateUVW(Csample, Csample.GetMg(), CTag, Csample.GetMg())
-         
-            #Change the order of the Tags (Texture Tag uses the closest right tag)
-            Csample.InsertTag(CTTag)
-            Csample.InsertTag(CTag)
-         
-            #Turn texture projection back do UVW on the Texture Tag
-            CTag[c4d.TEXTURETAG_PROJECTION] = 6 #Caution, this index could change on future C4D versions. Option should be "Camera Mapping"
+            print "hasExistingSamples: ", hasExistingSamples, currenName, Csample.GetName()
             
-            if Csample.GetUp():
-                Csample.InsertUnder(Csample.GetUp())
+            SParent = Csample.GetUp()
+            
+            XTag = None
+            for XTag in Csample.GetTags():
+               if XTag[c4d.ID_BASELIST_NAME] == "SampleUVW":
+                   CTag = XTag
+
+            SetPolygon(FileName + " Samples", Csample, CTag, Csample.GetPolygon(0), node, AtlasWidth, AtlasHeight)
+            
+            CTag = Csample.GetTag(c4d.Ttexture)
+            CTag.SetMaterial(AtlasMaterial)
+
+            oldDiff = Csample[c4d.ID_USERDATA,2]
+            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + oldDiff
+            
+            if SParent == SamplesContainer:
+                Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
+                Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
+                Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
+                Csample.InsertUnder(SamplesContainer)
+            
+            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - diff
             
         #Create and set object parameters
         CInstance = getChild(InstancesContainer, currenName + "_Instance")
@@ -387,26 +421,58 @@ def main():
         SamplesContainer[c4d.ID_USERDATA,4] = SamplesContainer[c4d.ID_USERDATA,4] + currenName + "_Sample,"
          
         if not hasExistingSamples:
-            print "Don´t have Existing Samples: ", hasExistingSamples, currenName
+            #print "Don´t have Existing Samples: ", hasExistingSamples, currenName
             #Set the Sample
-            Csample = c4d.BaseObject(c4d.Oplane)
+            Csample = c4d.BaseObject(c4d.Opolygon)
             Csample.SetName(currenName + "_Sample")
+            
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-            Csample[c4d.PRIM_PLANE_WIDTH] = float(node.attrib.get("width"))
-            Csample[c4d.PRIM_PLANE_HEIGHT] = float(node.attrib.get("height"))
-            Csample[c4d.PRIM_PLANE_SUBW] = 1
-            Csample[c4d.PRIM_PLANE_SUBH] = 1
-            Csample[c4d.PRIM_AXIS] = 5  #Caution, this index could change on future C4D versions. Option should be -Z
+           
             Csample.InsertUnder(SamplesContainer)
             
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Atlas Name Data
+            SetPolygon(FileName + " Samples", Csample, None, None, node, AtlasWidth, AtlasHeight)
+            
+            CTag = c4d.VertexColorTag(4)
+            CTag.__init__(4)
+            Csample.InsertTag(CTag)
+            VCdata = CTag.GetDataAddressW()
+            white = c4d.Vector(1.0, 1.0, 1.0)
+            
+            pointCount = Csample.GetPointCount()
+            for idx in xrange(pointCount):
+              CTag.SetColor(VCdata, None, None, idx, white)
+              CTag.SetAlpha(VCdata, None, None, idx, 1)
+              
+            c4d.EventAdd()
+            
+            CTag.SetPerPointMode(False) 
+   
+            CTag = Csample.MakeTag(c4d.Ttexture)
+            CTag[c4d.TEXTURETAG_PROJECTION] = 6
+            CTag.SetMaterial(AtlasMaterial)
+            Csample.InsertTag(CTag, Csample.GetTag(c4d.Tvertexmap))
+            
+         
+            if not MVCTag:
+                MVCTag = CTag
+            
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
             bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
             bc[c4d.DESC_EDITABLE] = False
             element = Csample.AddUserData(bc)
             Csample[element] = True
             
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR) 
+            bc[c4d.DESC_NAME] = "Offset"
+            bc[c4d.DESC_EDITABLE] = False
+            element = Csample.AddUserData(bc)
+            Csample[element] = diff
+
+            CHalfWidth = float(node.attrib.get("width")) * 0.5
+            CHalfHeight = float(node.attrib.get("height")) * 0.5
+        
             CInstance = c4d.BaseObject(c4d.Oinstance)
             CInstance.SetName(currenName + "_Instance")
             CInstance[c4d.INSTANCEOBJECT_LINK] = Csample
@@ -417,52 +483,21 @@ def main():
            
             #Refresh the managers to show the new object    
             c4d.EventAdd()
-             
-            #Make Object Editable
-            Csample2 = c4d.utils.SendModelingCommand(command = c4d.MCOMMAND_MAKEEDITABLE,list = [Csample], mode = c4d.MODELINGCOMMANDMODE_ALL, bc = c4d.BaseContainer(), doc = doc)[0]
-            Csample2.InsertUnder(SamplesContainer)
-            
-            #Create a Texture Tag and use Camera Mapping to reproduce Atlas Subtexture coordinates
-            CTag = Csample2.MakeTag(c4d.Ttexture)
-            CTag[c4d.TEXTURETAG_PROJECTION] = 8 #Caution, this index could change on future C4D versions. Option should be "Camera Mapping"
-            CTag[c4d.TEXTURETAG_CAMERA_FILMASPECT] = AtlasWidth/AtlasHeight
-            CTag[c4d.TEXTURETAG_CAMERA] = cameraProject
-            CTag[c4d.TEXTURETAG_MATERIAL] = AtlasMaterial
-         
-            #Create a UVW Tag with the created mapping from above. So object can be moved without have UVW mapping spoiled
-            CTTag = c4d.utils.GenerateUVW(Csample2, Csample2.GetMg(), CTag, Csample2.GetMg())
-         
-            #Change the order of the Tags (Texture Tag uses the closest right tag)
-            Csample2.InsertTag(CTTag)
-            Csample2.InsertTag(CTag)
-         
-            #Turn texture projection back do UVW on the Texture Tag
-            CTag[c4d.TEXTURETAG_PROJECTION] = 6 #Caution, this index could change on future C4D versions. Option should be "Camera Mapping"
                
             #Fix sample pivot to match the original sample. If SubTexture have no frame info, it was not trimed so there is no need to adjust pivot.
             if bool(node.attrib.get("frameX")):
-                pcount = Csample2.GetPointCount()
-                point = Csample2.GetAllPoints()
-                diffX = -float(node.attrib.get("frameX")) - (float(node.attrib.get("frameWidth"))  - float(node.attrib.get("width")))
-                diffY =  float(node.attrib.get("frameY")) + (float(node.attrib.get("frameHeight")) - float(node.attrib.get("height")))
-                diff = c4d.Vector(diffX * 0.5, diffY * 0.5, 0)
-                for i in xrange(pcount):
-                     Csample2.SetPoint(i, point[i]+diff) 
-                      
-                #Update object. Need to update bound box for selection and etc.
-                Csample2.Message (c4d.MSG_UPDATE)
-                Csample2[c4d.ID_BASEOBJECT_REL_POSITION] = Csample2[c4d.ID_BASEOBJECT_REL_POSITION] - diff
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = CInstance[c4d.ID_BASEOBJECT_REL_POSITION] - diff
-                 
+                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION]
+            
             #Create undo for this operation
-            doc.AddUndo(c4d.UNDOTYPE_NEW, Csample2)
+            doc.AddUndo(c4d.UNDOTYPE_NEW, Csample)
             #print node.tag, currenName, Csample2
         else:
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = CInstance[c4d.ID_BASEOBJECT_REL_POSITION] - diff
-            
+            if CInstance.GetUp() == InstancesContainer:
+                CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
+                CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
+                CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
+                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = CInstance[c4d.ID_BASEOBJECT_REL_POSITION] - diff
+                
             doc.AddUndo(c4d.UNDOTYPE_NEW, Csample)
      
     #Some samples could be missing from the new atlas, is this happen, mark them as missing samples by giving a red texture and fixed size
@@ -473,47 +508,101 @@ def main():
         # Udate samples which are missing on the new sprite sheet
         for Csample in get_all_objects(doc.GetFirstObject(), lambda x:UserDataAndNameCheck(x, missingName, "IsSpriteSheetSample", True), []):
             Csample.KillTag(c4d.Ttexture)
- 
-            CTag = Csample.MakeTag(c4d.Ttexture)
-            CTag[c4d.TEXTURETAG_MATERIAL] = MissingMaterial
             
-            if Csample.GetUp():
-                Csample.InsertUnder(Csample.GetUp())
+            CTag = Csample.MakeTag(c4d.Ttexture)
+            CTag[c4d.TEXTURETAG_PROJECTION] = 6
+            CTag.SetMaterial(MissingMaterial)
+            Csample.InsertTag(CTag, Csample.GetTag(c4d.Tvertexmap))
+            
+            if SParent == SamplesContainer:
+                Csample.InsertUnder(SamplesContainer)
      
     #Create a plane representing the Atlas Texture as a hole. Objects and this plane should show exacly same texture on them own position. Use this to verify if all goes right
-    Csample = doc.SearchObject(FileName + " TextureAtlas")
-    if not Csample:
-        Csample = c4d.BaseObject(c4d.Oplane)
-        Csample.SetName(FileName + " TextureAtlas")
-        Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = 0
-        Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = 0
-        Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 10
-        Csample[c4d.PRIM_PLANE_SUBW] = 1
-        Csample[c4d.PRIM_PLANE_SUBH] = 1
-        Csample[c4d.PRIM_AXIS] = 5
-        Csample[c4d.ID_BASEOBJECT_USECOLOR] = True
-        Csample[c4d.ID_BASEOBJECT_COLOR] = c4d.Vector(255, 255, 255)
+    CAtlas = doc.SearchObject(FileName + " TextureAtlas")
+    if not CAtlas:
+        CAtlas = c4d.BaseObject(c4d.Opolygon)
+        Polygon = c4d.CPolygon(0, 1, 2, 3)
+        Polygon.__init__(0, 1, 2, 3)
+        CAtlas.ResizeObject(4, 1)
+        CAtlas.SetPolygon(0, Polygon)
+        
+        PSs = []
+        PSs.append(c4d.Vector(-AtlasHalfWidth, -AtlasHalfHeight, 0))
+        PSs.append(c4d.Vector(AtlasHalfWidth, -AtlasHalfHeight, 0))
+        PSs.append(c4d.Vector(AtlasHalfWidth, AtlasHalfHeight, 0))
+        PSs.append(c4d.Vector(-AtlasHalfWidth, AtlasHalfHeight, 0)) 
+        
+        pcount = CAtlas.GetPointCount()
+        point = CAtlas.GetAllPoints()
+        for i in xrange(pcount):
+            CAtlas.SetPoint(i, PSs[i])
+
+        PCSs = []
+        PCSs.append(c4d.Vector(0, 1, 0))
+        PCSs.append(c4d.Vector(1, 1, 0))
+        PCSs.append(c4d.Vector(1, 0, 0))
+        PCSs.append(c4d.Vector(0, 0, 0))
+        
+        CTag = c4d.VertexColorTag(4)
+        CTag.__init__(4)
+        CAtlas.InsertTag(CTag)
+        VCdata = CTag.GetDataAddressW()
+        white = c4d.Vector(1.0, 1.0, 1.0)
+        
+        pointCount = CAtlas.GetPointCount()
+        for idx in xrange(pointCount):
+          CTag.SetColor(VCdata, None, None, idx, white)
+          CTag.SetAlpha(VCdata, None, None, idx, 1)
+          
+        c4d.EventAdd()
+        
+        CTag.SetPerPointMode(False) 
+ 
+        UVWTag = CAtlas.MakeVariableTag(c4d.Tuvw, 1)
+        UVWTag[c4d.ID_BASELIST_NAME] = "SampleUVW"
+        UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
+
+        CAtlas.SetName(FileName + " TextureAtlas")
+        CAtlas[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = 0
+        CAtlas[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = 0
+        CAtlas[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 10
+        #CAtlas[c4d.PRIM_PLANE_SUBW] = 1
+        #CAtlas[c4d.PRIM_PLANE_SUBH] = 1
+        #CAtlas[c4d.PRIM_AXIS] = 5
+        CAtlas[c4d.ID_BASEOBJECT_USECOLOR] = True
+        CAtlas[c4d.ID_BASEOBJECT_COLOR] = c4d.Vector(255, 255, 255)
          
         #Add texture tag to this plane
-        CTag = Csample.MakeTag(c4d.Ttexture)
-        CTag[c4d.TEXTURETAG_PROJECTION] = 8 #Caution, this index could change on future C4D versions. Option should be "Camera Mapping"
-        CTag[c4d.TEXTURETAG_CAMERA] = cameraProject
+        CTag = CAtlas.MakeTag(c4d.Ttexture)
+        CTag[c4d.TEXTURETAG_PROJECTION] = 6
         CTag[c4d.TEXTURETAG_MATERIAL] = AtlasMaterial
     else:
         CTag = Csample.GetTag(c4d.Ttexture)
-         
-    CTag[c4d.TEXTURETAG_CAMERA_FILMASPECT] = AtlasWidth/AtlasHeight
-     
+        PSs = []
+        PSs.append(c4d.Vector(-AtlasHalfWidth, -AtlasHalfHeight, 0))
+        PSs.append(c4d.Vector(AtlasHalfWidth, -AtlasHalfHeight, 0))
+        PSs.append(c4d.Vector(AtlasHalfWidth, AtlasHalfHeight, 0))
+        PSs.append(c4d.Vector(-AtlasHalfWidth, AtlasHalfHeight, 0)) 
+            
+        pcount = CAtlas.GetPointCount()
+        point = CAtlas.GetAllPoints()
+        for i in xrange(pcount):
+            CAtlas.SetPoint(i, PSs[i])
+
+
     #Add plane to the Atlas Container
-    Csample.InsertUnder(SamplesContainer)
-    doc.AddUndo(c4d.UNDOTYPE_NEW, Csample)
-     
-    Csample[c4d.PRIM_PLANE_WIDTH] = float(AtlasWidth)
-    Csample[c4d.PRIM_PLANE_HEIGHT] = float(AtlasHeight)
-     
-    #Put Camera on top of the hierarky
-    cameraProject.InsertUnder(SamplesContainer)
-    doc.AddUndo(c4d.UNDOTYPE_NEW, cameraProject)
+    CAtlas.InsertUnder(SamplesContainer)
+    doc.AddUndo(c4d.UNDOTYPE_NEW, CAtlas)
+        
+    MShaderT = c4d.BaseList2D(c4d.Xvertexmap)
+    MShaderT[c4d.SLA_DIRTY_VMAP_OBJECT] = MVCTag
+    AtlasMaterial.InsertShader( MShaderT )
+    AtlasMaterial[c4d.MATERIAL_ALPHA_SHADER] = MShaderT
+    AtlasMaterial.Message( c4d.MSG_UPDATE )
+    AtlasMaterial.Update( True, True )
+
+    CAtlas[c4d.PRIM_PLANE_WIDTH] = float(AtlasWidth)
+    CAtlas[c4d.PRIM_PLANE_HEIGHT] = float(AtlasHeight)
     
     doc.EndUndo()
     c4d.EventAdd()
