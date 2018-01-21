@@ -97,6 +97,8 @@ def GetElementColor(tag):
         return c4d.Vector(1, .5, 0)
     elif tag == "Pool":
         return c4d.Vector(0, 1, 1)
+    elif tag == "Pyra":
+        return c4d.Vector(1, 0, .5)
     else:
         return c4d.Vector(0, 1, 0)
 
@@ -538,14 +540,23 @@ def CreateElementContainer(node, keys, name, parent):
         FinalContainer = CContainer
         
     elif parent.GetName().split(".")[0] == "LevelArea" or parent.GetName().split(".")[0] == "LevelBackground":#Game Objects
-        CContainer = c4d.BaseObject(c4d.Onull)
-        Styke = GetNullStyle(node.tag)["RADIUS"]
-
-        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
-        CContainer[c4d.NULLOBJECT_RADIUS] = 50
-        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
-        CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
-        CContainer[c4d.NULLOBJECT_ICONCOL] = True
+        if node.tag == "Spikes" or node.tag == "Spikes" or node.tag == "ReagentCollider" or node.tag == "MessageCollider" or node.tag == "LevelCollision" or node.tag == "Spawner":
+            CContainer = c4d.BaseObject(c4d.Onull)
+            CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+            CContainer[c4d.NULLOBJECT_RADIUS] = 50
+            CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+            CContainer[c4d.NULLOBJECT_ICONCOL] = True
+            CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        elif node.tag == "GameSprite":
+            CContainer = c4d.BaseObject(c4d.Oconnector)
+            CContainer[c4d.CONNECTOBJECT_WELD] = False  
+            CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 0
+            CContainer[c4d.ID_BASEOBJECT_GENERATOR_FLAG] = False   
+        else:
+            CContainer = c4d.BaseObject(c4d.Oinstance)
+            CContainer[c4d.INSTANCEOBJECT_RENDERINSTANCE] = True
+            CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        
         CContainer[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
         
@@ -599,12 +610,17 @@ def CreateElementContainer(node, keys, name, parent):
             CGroupContainer = getChild(parent, CGName)
        
             if not CGroupContainer:
-                CGroupContainer = c4d.BaseObject(c4d.Onull)
-                
+                useNull = True
+                if useNull:
+                    CGroupContainer = c4d.BaseObject(c4d.Onull)
+                    CGroupContainer[c4d.NULLOBJECT_DISPLAY] = 3
+                    CGroupContainer[c4d.NULLOBJECT_RADIUS] = 100
+                    CGroupContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+                else:
+                    CGroupContainer = c4d.BaseObject(c4d.Oconnector)
+                    CGroupContainer[c4d.CONNECTOBJECT_WELD] = False            
+
                 CGroupContainer.SetName(CGName)
-                CGroupContainer[c4d.NULLOBJECT_DISPLAY] = 3
-                CGroupContainer[c4d.NULLOBJECT_RADIUS] = 100
-                CGroupContainer[c4d.NULLOBJECT_ORIENTATION] = 1
                 CGroupContainer.InsertUnder(parent)
                 CGroupContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
                 
@@ -734,6 +750,14 @@ def CreateElementContainer(node, keys, name, parent):
         CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = float(node.get("height"))
         
         FinalContainer = CBounds
+        
+    elif node.tag == "Pyra" or node.tag == "EnchantedBarrier":#Sprite Containers
+        CContainer = c4d.BaseObject(c4d.Oinstance)
+        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+        CContainer[c4d.NULLOBJECT_RADIUS] = 200
+        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+        CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+        FinalContainer = CContainer
 
     else:
         CContainer = c4d.BaseObject(c4d.Onull)
