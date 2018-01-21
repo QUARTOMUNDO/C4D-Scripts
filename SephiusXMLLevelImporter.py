@@ -59,7 +59,7 @@ def CreateLayer(layername, layercolor, layerParent):
         # Insert the layer under the parent
         NewLayer.InsertUnder(layerParent)
         
-    print LayersList
+    #print LayersList
     return NewLayer # end createlayer
 
 def GetLayer(layername):
@@ -93,6 +93,10 @@ def GetElementColor(tag):
         return c4d.Vector(1, 1, 1)
     elif tag == "LevelCollision":
         return c4d.Vector(.3, 1, 1)
+    elif tag == "BreakableObject":
+        return c4d.Vector(1, .5, 0)
+    elif tag == "Pool":
+        return c4d.Vector(0, 1, 1)
     else:
         return c4d.Vector(0, 1, 0)
 
@@ -170,6 +174,7 @@ def getChild(parent, childName):
 
 #Return true if object has a user data name and value is equal to desired
 def GetUserData(CObject, UDName):
+    #print CObject, UDName
     for id, bc in CObject.GetUserDataContainer():
         #print bc[c4d.DESC_NAME], UDName
         if bc[c4d.DESC_NAME] == UDName:
@@ -207,6 +212,7 @@ def setUserDataFromNode(cObject, node):
             GroupName = "Other Properties"
             
         if GroupName:
+            #print "group", cObject, GroupName
             userDataGroup = GetUserData(cObject, GroupName)
             
             if not userDataGroup:
@@ -343,8 +349,6 @@ def CreateElementContainer(node, keys, name, parent):
             
             AreasIDsList = AreasIDs.split(",")
             
-            #print len(AreasIDsList)
-            
             for strV in values:
                 valuesFloat.append(float(strV) / 100)
                 
@@ -370,15 +374,9 @@ def CreateElementContainer(node, keys, name, parent):
         CTag.__init__(FinalContainer.GetPointCount())
         FinalContainer.InsertTag(CTag)
         
-        # Tag is create with no data for some reason. This force Vertex Color Tag to initialize it´s data
-        #CTag.SetPerPointMode(False)
-        #CTag.SetPerPointMode(True)
-        
         # Obtains vertex colors data R/W addresses   
         DataR = CTag.GetDataAddressW()
         DataW = CTag.GetDataAddressR()
-        
-        #print CTag.GetDataCount(), FinalContainer.GetPolygonCount(), len(valuesFloat)
         
         pointCount = CTag.GetDataCount()
         
@@ -508,8 +506,6 @@ def CreateElementContainer(node, keys, name, parent):
         boundsStrH = float(node.get("bounds")[1:-1].split(",")[3].split("=")[1])
         boundRatio =  boundsStrW / boundsStrH
         
-        #print "Bounds: ", boundsStrX, boundsStrX, boundsStrW, boundsStrH 
-        
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 3
         CContainer[c4d.NULLOBJECT_RADIUS] = 300
@@ -544,7 +540,6 @@ def CreateElementContainer(node, keys, name, parent):
     elif parent.GetName().split(".")[0] == "LevelArea" or parent.GetName().split(".")[0] == "LevelBackground":#Game Objects
         CContainer = c4d.BaseObject(c4d.Onull)
         Styke = GetNullStyle(node.tag)["RADIUS"]
-        #print "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[", Styke
 
         CContainer[c4d.NULLOBJECT_DISPLAY] = 3
         CContainer[c4d.NULLOBJECT_RADIUS] = 50
@@ -555,14 +550,12 @@ def CreateElementContainer(node, keys, name, parent):
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
         
         GObjectType = node.tag
-        #print "<<<<<<<<<<<<<<<<<<<<<<<<<<<<",  parent.GetName()
+
         if GObjectType in objectTypesCounts.keys():
             objectTypesCounts[GObjectType] = objectTypesCounts[GObjectType] + 1
         else:
              objectTypesCounts[GObjectType] = 1
              
-        #print GObjectType, objectTypesCounts[GObjectType]
-        
         GObjectName = GObjectType + "." + str(objectTypesCounts[GObjectType])
         CContainer.SetName(GObjectName)
 
@@ -575,22 +568,27 @@ def CreateElementContainer(node, keys, name, parent):
             for attiName in paramsNode.attrib.keys():
                 node.set(attiName, paramsNode.get(attiName))
                 
-        if node.tag == "Spawner" or node.tag == "MessageCollider" or node.tag == "ReagentCollider":
+        if node.tag == "Spawner" or node.tag == "MessageCollider" or node.tag == "ReagentCollider" or node.tag == "EnchantedBarrier" or node.tag == "BlockedBarrier" or node.tag == "SocketBarrier" or node.tag == "Pool":
             boundsStrW = float(node.get("width"))
             boundsStrH = float(node.get("height"))
             
             #print "Bounds: ", boundsStrW, boundsStrW
-            
-            CBounds = c4d.BaseObject(c4d.Osplinerectangle)
+            if node.get("shapeType") == "Circle":
+                CBounds = c4d.BaseObject(c4d.Osplinecircle)
+                CBounds[c4d.PRIM_CIRCLE_RADIUS] = boundsStrW
+                CBounds[c4d.PRIM_PLANE] = 0
+                CBounds[c4d.SPLINEOBJECT_INTERPOLATION] = 1
+                CBounds[c4d.SPLINEOBJECT_SUB] = 2
+            else:
+                CBounds = c4d.BaseObject(c4d.Osplinerectangle)
+                CBounds[c4d.PRIM_RECTANGLE_WIDTH] = boundsStrW
+                CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = boundsStrH
+
             CBounds.SetName("Bounds." + GObjectName)
-            CBounds[c4d.PRIM_RECTANGLE_WIDTH] = boundsStrW
-            CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = boundsStrH
             CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
             CBounds[c4d.NULLOBJECT_ICONCOL] = True
             CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
             CBounds[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-            #CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = boundsStrX + (boundsStrW * .5) - float(node.get("x"))
-            #CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -boundsStrY - (boundsStrH * .5) + float(node.get("y"))
             
             CBounds.InsertUnder(CContainer)  
 
@@ -644,8 +642,14 @@ def CreateElementContainer(node, keys, name, parent):
             CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x")) - parent[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]
             CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y")) - parent[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]
             
+            for rawNode in node.iter("RawCollision"):
+                CreateElementContainer(rawNode, rawNode.attrib.keys(), "RawCollision", CContainer)
+                    
+            for boxNode in node.iter("BoxCollisions"):
+                CreateElementContainer(boxNode, boxNode.attrib.keys(), "BoxCollisions", CContainer)
+            
         FinalContainer = CContainer
-        
+    
     elif parent.GetName().split(".")[0] == "GameSprite":#Sprite Containers
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 3
@@ -660,9 +664,6 @@ def CreateElementContainer(node, keys, name, parent):
     
     elif node.tag == "Image":#Sprite Containers
         CContainer = c4d.BaseObject(c4d.Opolygon)
-        #CContainer[c4d.NULLOBJECT_DISPLAY] = 1
-        #CContainer[c4d.NULLOBJECT_RADIUS] = 20
-        #CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
         
         SetPolygon(node, CContainer, None, None, None)
         
@@ -674,26 +675,65 @@ def CreateElementContainer(node, keys, name, parent):
         CTag.SetMaterial(AtlasMaterial)
         CContainer.InsertTag(CTag)
         
-        #bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
-        #bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
-        #bc[c4d.DESC_EDITABLE] = False
-        #element = Csample.AddUserData(bc)
-        #Csample[element] = True
-
-        #CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
-        #CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
-        #CContainer[c4d.PRIM_PLANE_WIDTH] = 20
-        #CContainer[c4d.PRIM_PLANE_HEIGHT] = 20
-        #CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X] = float(node.get("scaleX"))
-        #CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y] = float(node.get("scaleY"))
-        #CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Z] = 1
-        #CContainer[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = float(node.get("rotation"))
-        #CContainer[c4d.PRIM_AXIS] = 5
-        #CContainer[c4d.PRIM_PLANE_SUBW] = 1
-        #CContainer[c4d.PRIM_PLANE_SUBH] = 1 
-        
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
         FinalContainer = CContainer
+        
+    elif node.tag == "RawCollision" or node.tag == "BoxCollisions":#Sprite Containers
+        CContainer = c4d.BaseObject(c4d.Onull)
+        CContainer.SetName(node.tag)
+        CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        CContainer[c4d.NULLOBJECT_ICONCOL] = True
+        CContainer[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
+        CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+        FinalContainer = CContainer  
+
+        for shapeNode in node.iter("RawShape"):
+            CreateElementContainer(shapeNode, shapeNode.attrib.keys(), shapeNode.get('type'), CContainer)
+            
+        for shapeNode in node.iter("BoxShape"):
+            CreateElementContainer(shapeNode, shapeNode.attrib.keys(), shapeNode.get('type'), CContainer)
+        
+
+    elif node.tag == "RawShape":#Sprite Containers
+        CBounds = c4d.BaseObject(c4d.Ospline)
+        CBounds.__init__(node.get("pointCount"), c4d.SPLINETYPE_LINEAR)
+
+        rawPointList = node.get("points").split(",")
+        idx = 0
+        pointList = []
+        while idx < len(rawPointList):
+            pointList.append(c4d.Vector(float(rawPointList[idx]), -float(rawPointList[idx + 1]), 0))
+            idx = idx + 2
+            
+        CBounds.ResizeObject(len(pointList))
+        
+        CBounds.SetAllPoints(pointList)
+        CBounds.SetName("RawShape." + name)
+        CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        CBounds[c4d.NULLOBJECT_ICONCOL] = True
+        CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
+        CBounds[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+        CBounds[c4d.SPLINEOBJECT_CLOSED] = True
+        CBounds.Message (c4d.MSG_UPDATE)
+        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
+        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
+
+        FinalContainer = CBounds
+        
+    elif node.tag == "BoxShape":#Sprite Containers
+        CBounds = c4d.BaseObject(c4d.Osplinerectangle)
+        CBounds.SetName("BoxShape." + name)
+        CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        CBounds[c4d.NULLOBJECT_ICONCOL] = True
+        CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
+        CBounds[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+        
+        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
+        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
+        CBounds[c4d.PRIM_RECTANGLE_WIDTH] = float(node.get("width"))
+        CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = float(node.get("height"))
+        
+        FinalContainer = CBounds
 
     else:
         CContainer = c4d.BaseObject(c4d.Onull)
@@ -703,9 +743,6 @@ def CreateElementContainer(node, keys, name, parent):
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
         FinalContainer = CContainer
         
-    #if parent != None:
-       #print parent  
-         
     setUserDataFromNode(FinalContainer, node)
     
     if parent != None:
@@ -713,7 +750,6 @@ def CreateElementContainer(node, keys, name, parent):
             FinalContainer.SetName(name)
         #Inser the Container to the doccument
         if not FinalContainer.GetUp():
-            #print FinalContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X], parent
             FinalContainer.InsertUnder(parent)  
             doc.AddUndo(c4d.UNDOTYPE_NEW, FinalContainer) 
     return FinalContainer
@@ -732,7 +768,6 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
     data = {}
     PSs = []
     PCSs = []
-    #print "SampleContainer", AtlasName + " Samples", SampleContainer, "SampleReference", TextureName + "_Sample", SampleReference
     Offset = SampleReference[GetUserData(SampleReference, "Offset")]
     
     if not Polygon:
@@ -759,30 +794,21 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
         
         CurrentVertexDataList = SampleNode.get("VertexData" + str(i)).split(",")
         
-        #print CurrentVertexDataList
-        
         for CPair in CurrentVertexDataList:
             VertexData[CPair.split(":")[0]] = float(CPair.split(":")[1])
         
         data["VertexPosition" + str(i)] = SampleReference[GetUserData(SampleReference, "Vertex " + str(i) + " Position")]
         
-        #print "HasDistortion: ", HasDistortion SampleReference[GetUserData(SampleReference, "Vertex " + str(i) + " Position")]
-        #print "data: ", data
-        #print "VertexPosition" + str(i), data["VertexPosition" + str(i)]
-        
-        print SampleReference
         textureHight = SampleReference[GetUserData(SampleReference, "Texture Height")]
         
         if HasDistortion:
-            if i == 0 or i == 2:
-                data["VertexDistortion" + str(i)] = c4d.Vector(0, -float(SampleNode.get("skewY")) * textureHight, 0)
+            if i == 0 or i == 3:
+                data["VertexDistortion" + str(i)] = c4d.Vector(0, float(SampleNode.get("skewY")) * textureHight * 0, 0)
             else:
-                data["VertexDistortion" + str(i)] = c4d.Vector(0, float(SampleNode.get("skewY")) * textureHight, 0)
-            #print VertexData["x"], VertexData["y"]
+                data["VertexDistortion" + str(i)] = c4d.Vector(0, -float(SampleNode.get("skewY")) * textureHight * 0, 0)
         else:
             data["VertexDistortion" + str(i)] = c4d.Vector(0, 0, 0)
             
-        #data["VertexDistortion" + str(i)] = c4d.Vector(0, 0, 0)
         data["VertexAlpha" + str(i)] = VertexData["alpha"]
         data["VertexColor" + str(i)] = c4d.Vector(VertexData["colorR"], VertexData["colorG"], VertexData["colorB"])
         
@@ -799,7 +825,7 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
     
     global ZOffset
-    ZOffset = ZOffset - 0.2
+    ZOffset = ZOffset - 0.005
     
     CObject[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_X] = float(SampleNode.get("x"))
     CObject[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Y] = -float(SampleNode.get("y"))
