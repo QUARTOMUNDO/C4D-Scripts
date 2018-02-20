@@ -21,6 +21,28 @@ TextureBiggerSize = 1024
 Csample = ""
 SamplesContainer = ""
 
+def setDiff(TextureNode):
+    HasFrmeInfo = bool(TextureNode.attrib.get("frameX"))
+    if HasFrmeInfo:
+        width = float(TextureNode.attrib.get("width"))
+        height = float(TextureNode.attrib.get("height"))
+        frameX = float(TextureNode.attrib.get("frameX"))
+        frameY = float(TextureNode.attrib.get("frameY"))
+        frameWitdh = float(TextureNode.attrib.get("frameWidth"))
+        frameHeight = float(TextureNode.attrib.get("frameHeight"))
+        
+        
+        CDIFFX = (width * 0.5) - ((frameWitdh * 0.5) + frameX)
+        CDIFFY = (height * 0.5) - ((frameHeight * 0.5) + frameY)
+        
+        #CDIFFX = -(float(TextureNode.attrib.get("frameX")) + (float(TextureNode.attrib.get("frameWidth"))) - float(TextureNode.attrib.get("width")))
+        #CDIFFY = (float(TextureNode.attrib.get("frameY")) + (float(TextureNode.attrib.get("frameHeight"))) - float(TextureNode.attrib.get("height")))
+        diff = c4d.Vector(CDIFFX, -CDIFFY, 0)
+    else:
+        diff = c4d.Vector(0, 0, 0)
+
+    return diff
+
 def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, AtlasHeight):
     #print "Getting Atlas Sizes: ", AtlasWidth, AtlasHeight
     #AtlasWidth =  float(TextureNode.attrib.get("width"))
@@ -31,15 +53,7 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     CHalfWidth = float(TextureNode.attrib.get("width")) * 0.5
     CHalfHeight = float(TextureNode.attrib.get("height")) * 0.5
     
-    HasFrmeInfo = bool(TextureNode.attrib.get("frameX"))
-    if HasFrmeInfo:
-        CDIFFX = -float(TextureNode.attrib.get("frameX")) - (float(TextureNode.attrib.get("frameWidth"))  - float(TextureNode.attrib.get("width")))
-        CDIFFY = float(TextureNode.attrib.get("frameY")) + (float(TextureNode.attrib.get("frameHeight")) - float(TextureNode.attrib.get("height")))
-        diff = c4d.Vector(CDIFFX * 0.5, CDIFFY * 0.5, 0)
-        CoDiff = c4d.Vector(0, 0, 0)
-    else:
-        diff = c4d.Vector(0, 0, 0)
-        CoDiff = c4d.Vector(0, 0, 0)
+    diff = setDiff(TextureNode)
     
     CX = float(TextureNode.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
     CY = -float(TextureNode.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
@@ -83,10 +97,10 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     #print "UVW: ", CoX, CoY, CoHX, CoHY
     
     PCSs = []
-    PCSs.append(c4d.Vector(CoX, CoY, 0) + CoDiff)
-    PCSs.append(c4d.Vector(CoHX, CoY, 0) + CoDiff)
-    PCSs.append(c4d.Vector(CoHX, CoHY, 0) + CoDiff)
-    PCSs.append(c4d.Vector(CoX, CoHY, 0) + CoDiff) 
+    PCSs.append(c4d.Vector(CoX, CoY, 0))
+    PCSs.append(c4d.Vector(CoHX, CoY, 0))
+    PCSs.append(c4d.Vector(CoHX, CoHY, 0))
+    PCSs.append(c4d.Vector(CoX, CoHY, 0)) 
               
     if not UVWTag:
         UVWTag = CObject.MakeVariableTag(c4d.Tuvw, 1)
@@ -94,8 +108,8 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
         
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
     
-    if CObject and CObject.GetUp() and CObject.GetUp().GetName() == ParentName:
-        CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - diff
+    #if CObject and CObject.GetUp() and CObject.GetUp().GetName() == ParentName:
+        #CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - diff
         
 #Return true if object has a user data name and value is equal to desired
 def HasUserData(CObject, UDName):
@@ -393,14 +407,8 @@ def main():
         CHalfWidth = float(node.attrib.get("width")) * 0.5
         CHalfHeight = float(node.attrib.get("height")) * 0.5
         
-        HasFrameInfo = bool(node.attrib.get("frameX"))
-        if HasFrameInfo:
-            CDIFFX = -float(node.attrib.get("frameX")) - (float(node.attrib.get("frameWidth"))  - float(node.attrib.get("width")))
-            CDIFFY = float(node.attrib.get("frameY")) + (float(node.attrib.get("frameHeight")) - float(node.attrib.get("height")))
-            diff = c4d.Vector(CDIFFX * 0.5, CDIFFY * 0.5, 0)
-        else:
-            diff = c4d.Vector(0, 0, 0)
-
+        diff = setDiff(node)
+        
         Csample = False
         
         hasExistingSamples = False
@@ -507,7 +515,9 @@ def main():
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-           
+            print diff
+            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - (diff * 1)
+            
             Csample.InsertUnder(SamplesContainer)
             
             SetPolygon(FileName + " Samples", Csample, None, None, node, AtlasWidth, AtlasHeight)
