@@ -70,7 +70,7 @@ def main():
     else:
         print "Object is non editable. Making it editable then getting it´s childs"
         doc.SetActiveObject(op, 0)
-        c4d.CallCommand(12236)
+        c4d.CallCommand(12236)# Make Editable
         #eobject = MakeEditable(op, doc, None)
         print "Objects returned from make editable: " + str(op)
         objects = get_all_objects(op, [])
@@ -84,7 +84,7 @@ def main():
     doc.SetActiveObject(objects[0], 0)    
     for pObject in objects:
         doc.SetActiveObject(pObject, 1) 
-    c4d.CallCommand(12236)
+    c4d.CallCommand(12236) # Make Editable
     
     # Start the Undo process.
     doc.StartUndo()
@@ -97,7 +97,7 @@ def main():
         
     #dont work, record only current values without considering the simulation  
     BakeAnimationsForSelection(op, doc)
-    op.KillTag(180000102)
+    op.KillTag(180000102)#remove dynamic body tag from objects
     
     #A Null that will have all the created joints
     JointsParant = c4d.BaseObject(c4d.Onull)
@@ -181,7 +181,7 @@ def main():
         
         DYTag = op.GetTag(180000102)
         doc.AddUndo(c4d.UNDOTYPE_NEW, op) 
-        op.KillTag(180000102)
+        op.KillTag(180000102)#remove dynamic body tag from objects
                    
     doc.EndUndo()
     c4d.EventAdd()
