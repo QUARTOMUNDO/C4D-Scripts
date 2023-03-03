@@ -2,11 +2,13 @@ import c4d
 import os
 import random
 import copy
+import math
 from random import randint
 from c4d import gui
 from c4d import storage
 from c4d import utils
 from xml.etree import ElementTree
+
 
 XMLpath = ""
 FileName = ""
@@ -279,7 +281,16 @@ def setUserDataFromNode(cObject, node):
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = FinalValue
 
+def CreateElementLevelRegion(node, keys, name, parent):
+    CContainer = c4d.BaseObject(c4d.Onull)
+    CContainer[c4d.NULLOBJECT_DISPLAY] = 2
+    CContainer[c4d.NULLOBJECT_RADIUS] = 600
+    CContainer[c4d.NULLOBJECT_ORIENTATION] = 0
+    FinalContainer = CContainer
 
+    setUserDataFromNode(FinalContainer, node)
+
+    return FinalContainer
 
 def CreateElementContainer(node, keys, name, parent):
     #print("------------------------------------------------------")
@@ -827,15 +838,22 @@ def CreateElementContainer(node, keys, name, parent):
         FinalContainer = CBounds
 
     else:
-        CContainer = c4d.BaseObject(c4d.Onull)
-        CContainer[c4d.NULLOBJECT_DISPLAY] = 3
-        CContainer[c4d.NULLOBJECT_RADIUS] = 200
-        CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
-        CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-        FinalContainer = CContainer
+        FinalContainer = (CurrentAreaLayer)
 
     setUserDataFromNode(FinalContainer, node)
+    insertContainerToDocument(FinalContainer, parent, name)
 
+    return FinalContainer
+
+def createOtherGameObjects(CurrentAreaLayer):
+    CContainer = c4d.BaseObject(c4d.Onull)
+    CContainer[c4d.NULLOBJECT_DISPLAY] = 3
+    CContainer[c4d.NULLOBJECT_RADIUS] = 200
+    CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+    CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+    return CContainer
+
+def insertContainerToDocument(FinalContainer, parent, name):
     if parent != None:
         if parent.GetName().split(".")[0] != "LevelArea" and parent.GetName().split(".")[0] != "LevelBackground":
             FinalContainer.SetName(name)
@@ -843,7 +861,6 @@ def CreateElementContainer(node, keys, name, parent):
         if not FinalContainer.GetUp():
             FinalContainer.InsertUnder(parent)
             doc.AddUndo(c4d.UNDOTYPE_NEW, FinalContainer)
-    return FinalContainer
 
 def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
     AtlasName = SampleNode.get("atlas")
@@ -851,7 +868,7 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
 
     HasDistortion = False
     if float(SampleNode.get("skewX")) != 0 or float(SampleNode.get("skewY")) != 0:
-        HasDistortion = True
+        HasDistortion = False
 
     SampleContainer = SamplesContainer = doc.SearchObject(AtlasName + " Samples")
     SampleReference = getChild(SampleContainer, TextureName + "_Sample")
@@ -859,6 +876,7 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
     data = {}
     PSs = []
     PCSs = []
+
     Offset = SampleReference[GetUserData(SampleReference, "Offset")]
 
     if not Polygon:
@@ -879,7 +897,35 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
         VertexColorTag.SetPerPointMode(False)
 
     VCdata = VertexColorTag.GetDataAddressW()
+    
+    #Challange here is to replicate Skew effect from 2D samples that existed. Since Cinema4D don't suppor skew and matrix operation is 3D and different
+    #This made conversion difficult. I'm trying to extract skew information to create a matrix just with that and apply that to vertex.
+    #Is not possible to apply a skewed matrix to a object cause Cinema4D will correct automaticly to Ortogonal matrix.
+    #So objects with skew will need to have this effect applyed on vertex itself
+    #i need to add support for custom vertex position in Sephius Engine later and abandon skew as a feature to deform samples.
+    
+    #Get matrix information, inclusind skewing
+    matrixA = float(SampleNode.attrib.get("matrixA"))
+    matrixB = float(SampleNode.attrib.get("matrixB"))
+    matrixC = float(SampleNode.attrib.get("matrixC"))
+    matrixD = float(SampleNode.attrib.get("matrixD"))
+    matrixTx = float(SampleNode.attrib.get("matrixTx"))
+    matrixTy = float(SampleNode.attrib.get("matrixTy"))
 
+    #Form matrix from data
+    o3dMatrix = c4d.Matrix(
+        v1=c4d.Vector(matrixA, -matrixB, 0),
+        v2=c4d.Vector(-matrixC, matrixD, 0),
+        v3=c4d.Vector(0, 0, 1),
+        off=c4d.Vector(0, 0, 0)
+    )
+    
+    #Create inverse trnsformation not taking into account skewing
+    CObject[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = float(SampleNode.get("rotation"))
+    CObject[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X] = float(SampleNode.get("scaleX"))
+    CObject[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y] = float(SampleNode.get("scaleY"))
+    invertMatrix = ~CObject.GetMg()
+    
     for i in range(4):
         VertexData = {}
 
@@ -887,23 +933,27 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
 
         for CPair in CurrentVertexDataList:
             VertexData[CPair.split(":")[0]] = float(CPair.split(":")[1])
-
-        data["VertexPosition" + str(i)] = SampleReference[GetUserData(SampleReference, "Vertex " + str(i) + " Position")]
+        
+        vertexPos = SampleReference[GetUserData(SampleReference, "Vertex " + str(i) + " Position")]
+        vertexPos = vertexPos * o3dMatrix
+        vertexPos = vertexPos * invertMatrix
+        
+        data["VertexPosition" + str(i)] = vertexPos
 
         textureHight = SampleReference[GetUserData(SampleReference, "Texture Height")]
 
-        if HasDistortion:
-            if i == 0 or i == 3:
-                data["VertexDistortion" + str(i)] = c4d.Vector(0, float(SampleNode.get("skewY")) * textureHight * 0, 0)
-            else:
-                data["VertexDistortion" + str(i)] = c4d.Vector(0, -float(SampleNode.get("skewY")) * textureHight * 0, 0)
-        else:
-            data["VertexDistortion" + str(i)] = c4d.Vector(0, 0, 0)
+        #if HasDistortion:
+            #if i == 0 or i == 3:
+                #data["VertexDistortion" + str(i)] = c4d.Vector(0, float(SampleNode.get("skewY")) * textureHight * 0, 0)
+            #else:
+                #data["VertexDistortion" + str(i)] = c4d.Vector(0, -float(SampleNode.get("skewY")) * textureHight * 0, 0)
+        #else:
+            #data["VertexDistortion" + str(i)] = c4d.Vector(0, 0, 0)
 
         data["VertexAlpha" + str(i)] = VertexData["alpha"]
         data["VertexColor" + str(i)] = c4d.Vector(VertexData["colorR"], VertexData["colorG"], VertexData["colorB"])
 
-        PSs.append(data["VertexPosition" + str(i)] + data["VertexDistortion" + str(i)])
+        PSs.append(data["VertexPosition" + str(i)])
         CObject.SetPoint(i, PSs[i])
 
         data["Vertex" + str(i) + "UVW"] = SampleReference[GetUserData(SampleReference, "Vertex " + str(i) + " UVW")]
@@ -925,7 +975,7 @@ def SetPolygon(SampleNode, CObject, UVWTag, VertexColorTag, Polygon):
     CObject[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X] = float(SampleNode.get("scaleX"))
     CObject[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y] = float(SampleNode.get("scaleY"))
 
-    CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - Offset
+    #CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - Offset
 
     #Update object. Need to update bound box for selection and etc.
     CObject.Message (c4d.MSG_UPDATE)
