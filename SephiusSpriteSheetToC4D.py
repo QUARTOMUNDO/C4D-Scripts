@@ -23,7 +23,8 @@ SamplesContainer = ""
 global ScaleRatio
 ScaleRatio = 1
 
-def setDiff(TextureNode):
+#Define the pivot center of a sprite when it has transparent pixels cropped during pack process and that made center offset
+def setPivotDiff(TextureNode):
 
     HasFrmeInfo = bool(TextureNode.attrib.get("frameX")) * ScaleRatio
     if HasFrmeInfo:
@@ -39,9 +40,9 @@ def setDiff(TextureNode):
 
         #CDIFFX = -(float(TextureNode.attrib.get("frameX")) * ScaleRatio + (float(TextureNode.attrib.get("frameWidth")) * ScaleRatio) - float(TextureNode.attrib.get("width")) * ScaleRatio)
         #CDIFFY = (float(TextureNode.attrib.get("frameY")) * ScaleRatio + (float(TextureNode.attrib.get("frameHeight")) * ScaleRatio) - float(TextureNode.attrib.get("height")) * ScaleRatio)
-        diff = c4d.Vector(CDIFFX, -CDIFFY, 0)
+        pivotDiff = c4d.Vector(CDIFFX, -CDIFFY, 0)
     else:
-        diff = c4d.Vector(0, 0, 0)
+        pivotDiff = c4d.Vector(0, 0, 0)
 
     return diff
 
@@ -56,7 +57,7 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     CHalfWidth = float(TextureNode.attrib.get("width")) * 0.5
     CHalfHeight = float(TextureNode.attrib.get("height")) * 0.5
 
-    diff = setDiff(TextureNode)
+    pivotDiff = setPivotDiff(TextureNode)
 
     CX = float(TextureNode.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
     CY = -float(TextureNode.attrib.get("y")) + AtlasHalfHeight - CHalfHeight
@@ -418,7 +419,7 @@ def main():
         CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
         CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
 
-        diff = setDiff(node)
+        pivotDiff = setPivotDiff(node)
 
         Csample = False
 
@@ -450,8 +451,8 @@ def main():
                 CTag.SetMaterial(AtlasMaterial)
                 Csample.InsertTag(CTag, MVCTag)
 
-                oldDiff = Csample[c4d.ID_USERDATA,2]
-                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + oldDiff
+                oldPivotDiff = Csample[c4d.ID_USERDATA,2]
+                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + oldPivotDiff
 
                 if SParent == SamplesContainer:
                     Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
