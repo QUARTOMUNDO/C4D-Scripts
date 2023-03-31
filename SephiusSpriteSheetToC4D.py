@@ -44,7 +44,7 @@ def setPivotDiff(TextureNode):
     else:
         pivotDiff = c4d.Vector(0, 0, 0)
 
-    return diff
+    return pivotDiff
 
 def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, AtlasHeight):
 
@@ -76,10 +76,10 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     hY = CPH * ScaleRatio
 
     PSs = []
-    PSs.append(c4d.Vector(pX, pY, 0) + diff)
-    PSs.append(c4d.Vector(hX, pY, 0) + diff)
-    PSs.append(c4d.Vector(hX, hY, 0) + diff)
-    PSs.append(c4d.Vector(pX, hY, 0) + diff)
+    PSs.append(c4d.Vector(pX, pY, 0) + pivotDiff)
+    PSs.append(c4d.Vector(hX, pY, 0) + pivotDiff)
+    PSs.append(c4d.Vector(hX, hY, 0) + pivotDiff)
+    PSs.append(c4d.Vector(pX, hY, 0) + pivotDiff)
 
     if not Polygon:
         Polygon = c4d.CPolygon(0, 1, 2, 3)
@@ -117,7 +117,7 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
 
     #if CObject and CObject.GetUp() and CObject.GetUp().GetName() == ParentName:
-        #CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - diff
+        #CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
 
 #Return true if object has a user data name and value is equal to desired
 def HasUserData(CObject, UDName):
@@ -477,7 +477,7 @@ def main():
                             Csample[element] = VertexCoord["d"]
 
                     element = GetUserData(Csample, "Offset")
-                    Csample[element] = diff
+                    Csample[element] = pivotDiff
 
                     element = GetUserData(Csample, "Texture Width")
                     Csample[element] = float(node.attrib.get("width")) * ScaleRatio
@@ -509,7 +509,7 @@ def main():
                     else:
                         Csample[element] = float(node.attrib.get("height")) * ScaleRatio
 
-                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - diff
+                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
 
         #Create and set object parameters
         CInstance = getChild(InstancesContainer, currenName + "_Instance")
@@ -531,8 +531,8 @@ def main():
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-            #print(diff)
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - (diff * 1)
+            #print(pivotDiff)
+            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - (pivotDiff * 1)
 
             Csample.InsertUnder(SamplesContainer)
 
@@ -574,6 +574,24 @@ def main():
             bc[c4d.DESC_PARENTGROUP] = C2element
             element = Csample.AddUserData(bc)
             Csample[element] = currenName
+            
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+            bc[c4d.DESC_NAME] = "blendMode"
+            bc[c4d.DESC_SHORT_NAME] = "blendMode"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = C2element
+            element = Csample.AddUserData(bc)
+            Csample[element] = "normal"
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
+            bc[c4d.DESC_NAME] = "Sample Reference"
+            bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = C2element
+            element = Csample.AddUserData(bc)
+            Csample[element] = Csample
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
             bc[c4d.DESC_NAME] = "Vertex Position"
@@ -632,7 +650,7 @@ def main():
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_PARENTGROUP] = C2element
             element = Csample.AddUserData(bc)
-            Csample[element] = diff
+            Csample[element] = pivotDiff
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
             bc[c4d.DESC_NAME] = "Texture Size"
@@ -696,7 +714,7 @@ def main():
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
             bc[c4d.DESC_NAME] = "Texture Frame Width"
-            bc[c4d.DESC_SHORT_NAME] = "Frame Width"
+            bc[c4d.DESC_SHORT_NAME] = "Texture Frame Width"
             bc[c4d.DESC_EDITABLE] = False
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
@@ -708,7 +726,7 @@ def main():
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
             bc[c4d.DESC_NAME] = "Texture Frame Height"
-            bc[c4d.DESC_SHORT_NAME] = "Frame Height"
+            bc[c4d.DESC_SHORT_NAME] = "Texture Frame Height"
             bc[c4d.DESC_EDITABLE] = False
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
@@ -767,7 +785,7 @@ def main():
                 CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
                 CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
                 CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = CInstance[c4d.ID_BASEOBJECT_REL_POSITION] - diff
+                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = CInstance[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
 
             doc.AddUndo(c4d.UNDOTYPE_NEW, Csample)
 
