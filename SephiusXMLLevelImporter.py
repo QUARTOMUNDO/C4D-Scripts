@@ -21,6 +21,26 @@ global CurrentAreaLayer
 global CurrentBackground
 global CurrentGroup
 
+#return the position in Z depending on the group object is related to
+def getLocalSpacing(groupID):
+    switcher = {
+        0: 0,
+        1: 0,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+        6: 0,
+        7: 0,
+        8: 0,
+        9: 0,
+        10: 0,
+        11: -0.05,
+        12: 0,
+        13: 0,
+    }
+    #print("group: ", int(groupID), " ",  switcher.get(int(groupID), 0.0))
+    return switcher.get(int(groupID), 0.0)
 
 #return the position in Z depending on the group object is related to
 def getGroupZPos(groupID):
@@ -36,7 +56,7 @@ def getGroupZPos(groupID):
         8: 48,
         9: 0,
         10: 0,
-        11: -38,
+        11: -180,
         12: -5,
         13: -10,
     }
@@ -648,7 +668,7 @@ def CreateElementContainer(node, keys, name, parent):
             for attiName in paramsNode.attrib.keys():
                 node.set(attiName, paramsNode.get(attiName))
 
-        if node.tag == "Spawner" or node.tag == "MessageCollider" or node.tag == "ReagentCollider":
+        if node.tag == "Spawner" or node.tag == "MessageCollider" or node.tag == "ReagentCollider" or "Barrier" in node.tag or "BreakableObject" in node.tag or "Reward" in node.tag or "Pyra" in node.tag:
             useBound = True;
         else:
             useBound = False;
@@ -681,23 +701,59 @@ def CreateElementContainer(node, keys, name, parent):
             CContainer[c4d.CONNECTOBJECT_WELD] = False
             CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 0
             CContainer[c4d.ID_BASEOBJECT_GENERATOR_FLAG] = False
+            
+            # Set the Python code for the tag
+            pythonCode = """
 
+import c4d
+
+global intCount
+intCount = 0
+
+def main():
+    # Get the owner object
+    owner = op.GetObject()
+    
+    global intCount
+    intCount = 0
+    
+    recursive_iteration(owner)
+
+    c4d.EventAdd()
+
+def recursive_iteration(obj):
+    # Set the step value for distributing the children using local spacing and user data that exist in the Level Region container (root container)
+    
+    step = op[c4d.ID_USERDATA,1] + op[c4d.ID_USERDATA,2][c4d.ID_USERDATA,1]
+    global intCount
+    # Update the current object's Z position
+    obj[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Z] = intCount * step
+    print(obj.GetName(), intCount)
+
+    # Iterate through the object's children and call the recursive function
+    child = obj.GetDown()
+    while child:
+        
+        intCount += 1
+        recursive_iteration(child)
+        child = child.GetNext()
+
+if __name__ == '__main__':
+    main()
+
+        """
+            # Add the tag to the selected object
+            addPythonTagWithCode(CContainer, node, pythonCode)
+            
             for viewNode in node.iter("View"):
                 for attiName in viewNode.attrib.keys():
                     node.set(attiName, viewNode.get(attiName))
                 for containerNode in viewNode:
                     CreateElementContainer(containerNode, containerNode.attrib.keys(), containerNode.get('name'), CContainer)
 
-        elif node.tag == "Spawner" or node.tag == "MessageCollider" or node.tag == "ReagentCollider":
-            CContainer = c4d.BaseObject(c4d.Onull)
-            CContainer[c4d.NULLOBJECT_DISPLAY] = 3
-            CContainer[c4d.NULLOBJECT_RADIUS] = 50
-            CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
-            CContainer[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
-            CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
-
         elif (node.tag == "LevelCollision") or node.tag == "Spikes":
             CContainer = c4d.BaseObject(c4d.Onull)
+            #GObjectName = node.get('name')
             CContainer[c4d.NULLOBJECT_DISPLAY] = 3
             CContainer[c4d.NULLOBJECT_RADIUS] = 70
             CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
@@ -773,7 +829,10 @@ def CreateElementContainer(node, keys, name, parent):
                 CGroupContainer.SetName(CGName)
                 CGroupContainer.InsertUnder(parent)
                 CGroupContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-
+            
+            #Move container to back/front depending on their group, this emulates the parallax effect from SephiusEngine
+            CGroupContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = getGroupZPos(node.get("group"))
+            
             if node.tag != "GameSprite":
                 #print(node.tag)
                 OGName = node.tag + "s"
@@ -795,7 +854,9 @@ def CreateElementContainer(node, keys, name, parent):
                 CContainer.InsertUnder(OGroupContainer)
             else:
                 CContainer.InsertUnder(CGroupContainer)
-
+        else:
+            print('object: ', node.tag, 'has no group property')
+        
         #Put Object on a layer and with a specified collor
         CContainer[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
@@ -815,64 +876,12 @@ def CreateElementContainer(node, keys, name, parent):
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
 
         #Move container to back/front depending on their group, this emulates the parallax effect from SephiusEngine
-        CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = getGroupZPos(node.get("group"))
+        #CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = getGroupZPos(node.get("group"))
         #Scales container depending on their group to make size depth independant, this emulates the parallax effect from SephiusEngine
         CContainer[c4d.ID_BASEOBJECT_REL_SCALE] = c4d.Vector(1, 1, 1) * getScaleByGroup(node.get("group"))
 
         for ImageNode in node.iter("Image"):
             CreateElementContainer(ImageNode, ImageNode.attrib.keys(), ImageNode.get('texture'), CContainer)
-
-        # Create a new Python tag
-        pythonTag = c4d.BaseTag(c4d.Tpython)
-
-        # Add a User Data parameter to the tag for the step value
-        step_param = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-        step_param.SetString(c4d.DESC_NAME, "Local Sample Spacing")
-        step_param.SetFloat(c4d.DESC_MIN, -100.0)
-        step_param.SetFloat(c4d.DESC_MAX, 100.0)
-        step_param.SetFloat(c4d.DESC_STEP, 0.1)
-        step_param.SetFloat(c4d.DESC_DEFAULT, 0)
-        pythonTag.AddUserData(step_param)
-
-        pythonTag[c4d.ID_USERDATA,1] = 0
-
-        #Level Region container (root container)
-        RootParam = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
-        RootParam.SetString(c4d.DESC_NAME, "Region Root")
-        RootParam[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Celement = pythonTag.AddUserData(RootParam)
-        pythonTag[Celement] = doc.SearchObject(RegionName)
-
-        # Set the Python code for the tag
-        pythonTag[c4d.TPYTHON_CODE] = """
-import c4d
-
-def main():
-    # Get the owner object
-    owner = op.GetObject()
-
-    # Get the children of the owner object
-    children = owner.GetChildren()
-
-    # Set the step value for distributing the children use local spacing an user data that exsit in the Level Region container (root container)
-    step = op[c4d.ID_USERDATA,1] + op[c4d.ID_USERDATA,2][c4d.ID_USERDATA,1]
-
-    # Get the initial Z position for the first child
-    z = float(0)
-
-    # Distribute the children in the Z-axis
-    for i, child in enumerate(children):
-        if i == 0:
-            continue
-        # Calculate the new Z position based on the step value
-        z += float(step)
-        # Set the new matrix for the child object
-        child[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = z
-
-    c4d.EventAdd()
-        """
-        # Add the tag to the selected object
-        CContainer.InsertTag(pythonTag)
 
         for EffectArtNode in node.iter("EffectArt"):
             CreateElementContainer(EffectArtNode, EffectArtNode.attrib.keys(), EffectArtNode.get('texture'), CContainer)
@@ -954,13 +963,19 @@ def main():
         CContainer[c4d.INSTANCEOBJECT_RENDERINSTANCE_MODE] = 1
         CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-
+        
+        SampleReference = doc.SearchObject(name)
+        print(SampleReference)
+        CContainer[c4d.INSTANCEOBJECT_LINK] = SampleReference
+        
         CContainer[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_X] = float(node.get("x"))
         CContainer[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Y] = -float(node.get("y"))
         CContainer[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = float(node.get("rotation"))
         CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X] = float(node.get("scaleX"))
         CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y] = float(node.get("scaleY"))
-
+        
+        setColorTagWithData(CContainer, node)
+        
         AutoSetUserData = True
         FinalContainer = CContainer
 
@@ -991,7 +1006,7 @@ def main():
     elif node.tag == "RawShape" or node.tag == "ProcessedShape":
         CBounds = c4d.BaseObject(c4d.Ospline)
         CBounds.__init__(node.get("pointCount"), c4d.SPLINETYPE_LINEAR)
-        name = node.tag   
+        name = node.tag
         rawPointList = node.get("points").split(",")
         idx = 0
         pointList = []
@@ -1019,22 +1034,22 @@ def main():
 
     elif node.tag == "BoxShape":
         CBounds = c4d.BaseObject(c4d.Osplinerectangle)
-        name = "BoxShape"   
+        name = "BoxShape"
         CBounds.SetName("BoxShape." + name)
         CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
         CBounds[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
         CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
         CBounds[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-        
+
         cMatrix = Convert2DMatrixTo3DMatrix(node)
         CBounds.SetMg(cMatrix)
-        
+
         CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
         CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
-        
+
         #print(float(node.get("rotation")))
         #CBounds[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.degrees(float(node.get("rotation")))
-        
+
         CBounds[c4d.PRIM_RECTANGLE_WIDTH] = float(node.get("width"))
         CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = float(node.get("height"))
 
@@ -1051,6 +1066,35 @@ def main():
 
     return FinalContainer
 
+def addPythonTagWithCode(obj, node, texCode):
+    # Create a new Python tag
+    pythonTag = c4d.BaseTag(c4d.Tpython)
+
+    # Add a User Data parameter to the tag for the step value
+    step_param = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    step_param.SetString(c4d.DESC_NAME, "Local Sample Spacing")
+    step_param.SetFloat(c4d.DESC_MIN, -100.0)
+    step_param.SetFloat(c4d.DESC_MAX, 100.0)
+    step_param.SetFloat(c4d.DESC_STEP, 0.1)
+    step_param.SetFloat(c4d.DESC_DEFAULT, 0)
+    pythonTag.AddUserData(step_param)
+    
+    pythonTag[c4d.ID_USERDATA,1] = getLocalSpacing(node.get("group"))
+
+    #Level Region container (root container)
+    RootParam = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
+    RootParam.SetString(c4d.DESC_NAME, "Region Root")
+    RootParam[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    Celement = pythonTag.AddUserData(RootParam)
+    
+    pythonTag[Celement] = doc.SearchObject(RegionName)
+
+    # Set the Python code for the tag
+    pythonTag[c4d.TPYTHON_CODE] = texCode
+
+    # Add the tag to the selected object
+    obj.InsertTag(pythonTag)
+    
 def setColorTagWithData(CContainer, data):
     #See if object has Transparency or Color
     cAlpha = float(data.get("alpha"))
@@ -1230,20 +1274,20 @@ def Convert2DMatrixTo3DMatrix(SampleNode):
         off=c4d.Vector(0, 0, 0)
     )
     return o3dMatrix
-    
+
 def Convert3DMatrixTo2DMatrix(o3dMatrix, node):
     o3dMatrix.v1.x
     -o3dMatrix.v1.y
     -o3dMatrix.v2.x
     o3dMatrix.off.y
     -o3dMatrix.off.x
-    
+
     #Get matrix information, inclusind skewing
     float(node.attrib.set(o3dMatrix.v1.x))
     float(node.attrib.set(-o3dMatrix.v1.y))
     float(node.attrib.set(-o3dMatrix.v2.x))
     float(node.attrib.set(o3dMatrix.v2.y))
-    
+
     float(node.attrib.set(o3dMatrix.off.y))
     float(node.attrib.set(-o3dMatrix.off.x))
 
