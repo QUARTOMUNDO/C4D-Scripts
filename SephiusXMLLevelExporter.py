@@ -1,6 +1,77 @@
 import c4d
 import xml.etree.ElementTree as ET
 import math
+from c4d import DescID
+
+def get_parameter_type(obj, parameter_id):
+    parameter_data = obj.GetParameter(parameter_id, c4d.DESCFLAGS_GET_0)
+
+    print('parameter_data', parameter_data)
+
+    if parameter_data is None:
+        return None
+
+    value, dtype = parameter_data
+
+    if dtype == c4d.DTYPE_BOOL:
+        return 'bool'
+    elif dtype == c4d.DTYPE_LONG:
+        return 'int'
+    elif dtype == c4d.DTYPE_REAL:
+        return 'float'
+    elif dtype == c4d.DTYPE_VECTOR:
+        return 'c4d.Vector'
+    elif dtype == c4d.DTYPE_STRING:
+        return 'str'
+    elif dtype == c4d.DTYPE_FILENAME:
+        return 'c4d.storage.Filename'
+    elif dtype == c4d.DTYPE_COLOR:
+        return 'c4d.Color'
+    else:
+        return 'unknown'
+
+
+def get_userdata_values(obj, group_name):
+    user_data_dict = {}
+    #print('1', group_name)
+    if not obj:
+        return user_data_dict
+
+    # Get the object's user data container
+    ud_container = obj.GetUserDataContainer()
+
+    for id, bc in ud_container:
+        # Check if the user data is in the specified group
+        parent_group_id = bc[c4d.DESC_PARENTGROUP]
+
+        if parent_group_id and obj[parent_group_id] == group_name:
+            # Get the variable name and value
+            variable_name = bc[c4d.DESC_NAME]
+            variable_value = obj[id]
+
+            #Bool Conversion. e verify if value has UINT which means it is real or vector
+            #Maybe don't work if data is int'
+            if bc[c4d.DESC_UNIT] is None:
+                if variable_value == 0:
+                    variable_value = 'false'
+                elif variable_value == 1:
+                    variable_value = 'true'
+            else:
+                #remove .0 a the end of int numbers
+                if len(str(variable_value).split(".")) > 1:
+                    if str(variable_value).split(".")[1] == '0':
+                        variable_value = str(variable_value).split(".")[0]
+
+            print("variable_value", bc[c4d.DESC_UNIT], variable_name, variable_value )
+
+            # Get the parameter data type
+            #data_entry = bc.GetCustomDataType(id)
+            #dtype = data_entry.GetValue()
+
+            #print('5', group_name, variable_name, ud_type, variable_value, bool(variable_value))
+            user_data_dict[variable_name] =  str(variable_value)
+
+    return user_data_dict
 
 def indxTrans(j):
     #  <p>The indices of the vertices are arranged like this:</p>
@@ -20,24 +91,24 @@ def indxTrans(j):
 
 def indxTransUV(j):
     indxArray = [3,2,1,0]
-    
+
     return indxArray[j]
 
 def MaxAndMinCoord(coordinates):
     # Define a list to store the x and y coordinates of each vector
     #coordinates = [vector1, vector2, vector3, vector4]
-    
+
     # Initialize the minimum and maximum height and width values
     min_height = math.inf
     max_height = -math.inf
     min_width = math.inf
     max_width = -math.inf
-    
+
     # Loop through each coordinate and update the minimum and maximum values
     for coordinate in coordinates:
         x = coordinate.x
         y = coordinate.y
-        
+
         if y < min_height:
             min_height = y
         if y > max_height:
@@ -46,7 +117,7 @@ def MaxAndMinCoord(coordinates):
             min_width = x
         if x > max_width:
             max_width = x
-    
+
     # Print the minimum and maximum height and width values
     #print("Minimum height:", min_height)
     #print("Maximum height:", max_height)
@@ -55,6 +126,7 @@ def MaxAndMinCoord(coordinates):
     return [min_width, max_width, min_height, max_height]
 
 def SetPolygonVertexData(PolygonObject, node, SampleReference):
+    print(type(PolygonObject), type(PolygonObject) is c4d.PolygonObject)
     if PolygonObject is not None and type(PolygonObject) is c4d.PolygonObject:
         # Get the point count and list of points
         point_count = PolygonObject.GetPointCount()
@@ -91,20 +163,20 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             # Get the indices of the points for the current polygon. Note that the order is different from Cinema to Sephius Engine
             pointsIndx = [poly.b, poly.a, poly.c, poly.d]
             uvPoints = [uvw["b"], uvw["a"], uvw["c"], uvw["d"]]
-            
+
             # Get the U and V components of the vertex's UV coordinates for ref sample
             uvwRef = Refuv_tag.GetSlow(0)
             REFuvPoints = [uvwRef["b"], uvwRef["a"], uvwRef["c"], uvwRef["d"]]
             Range = MaxAndMinCoord(REFuvPoints)
-            
+
             uMin = Range[0]
             uMax = Range[1]
             vMin = Range[2]
             vMax = Range[3]
-            
-            print ('REPoints ', REFuvPoints)
-            print ('uvPoints ', uvPoints)
-            
+
+            #print ('REPoints ', REFuvPoints)
+            #print ('uvPoints ', uvPoints)
+
             for j in range(4):
                 # Get the vertex index for the current vertex of the polygon
                 point = PolygonObject.GetPoint(pointsIndx[j])
@@ -132,7 +204,7 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             vertex_positions = vertex_positions[:-1]
 
             # Print the UV coordinates
-            print(vertex_uvs)
+            #print(vertex_uvs)
 
             #print("vertex_positions" + str(vertex_positions))
 
@@ -153,17 +225,17 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
        raise ValueError("Provided object is not a polygon object ", PolygonObject)
 
 def remap(value, old_min, old_max):
-    
+
     """
     Remap a value from the old range [old_min, old_max] to the new range [new_min, new_max].
     """
     remapRange = old_max - old_min
     minSize = value - old_min
-    
+
     remapValue = minSize / remapRange
-    print('old_min', old_min, '   /    old_max', old_max,  '   /  remapRange',   remapRange )
-    print('value', value, '   /    remapValue', remapValue,  '   /  minSize',   minSize )
-    
+    #print('old_min', old_min, '   /    old_max', old_max,  '   /  remapRange',   remapRange )
+    #print('value', value, '   /    remapValue', remapValue,  '   /  minSize',   minSize )
+
     return remapValue
 
 def GetPolygonPointsCoords(PolygonObject):
@@ -198,7 +270,7 @@ def GetPolygonPointsCoords(PolygonObject):
        raise ValueError("Provided object is not a spline ", SplineObject)
 
 def GetSplinePointsPositions(SplineObject):
-    if SplineObject is not None and type(SplineObject) is c4d.SplineObject:
+    if SplineObject is not None and type(SplineObject)is c4d.SplineObject:
         # Get the number of points on the spline
         point_count = SplineObject.GetPointCount()
 
@@ -215,7 +287,7 @@ def GetSplinePointsPositions(SplineObject):
 
             PointsLocationsSrt += str(point_location.x) + ',' + str(-point_location.y) + Divisior
 
-        print("Points", PointsLocationsSrt)
+        #print("Points", PointsLocationsSrt)
         return PointsLocationsSrt
     else:
        raise ValueError("Provided object is not a spline ", SplineObject)
@@ -231,6 +303,24 @@ def getChildCount(obj):
         child = child.GetNext()
 
     return child_count
+
+#return the group for an object by the parent its belongs.
+#It looks for a parent with name 'Group' then look for each number it has.
+def getGroupByParent(obj):
+    if obj is None:
+        return 12
+
+    parent = obj.GetUp()
+    if parent is None:
+        return 12
+    
+    ParentName = parent.GetName()
+    if "Group" in ParentName:
+        if len(ParentName.split(".")) > 1:
+            GroupName = ParentName.split(".")[1]    
+            return str(GroupName)
+
+    return getGroupByParent(parent)
 
 def get_top_parent(obj):
     parent = obj.GetUp()
@@ -263,7 +353,7 @@ def Convert3DMatrixTo2DMatrix(obj, node):
     worldMatrix = obj.GetMg()
     localMatrix = obj.GetMl()
     Bound = obj.GetRad()
-    print(Bound)
+    #print(Bound)
     #Get matrix information, inclusind skewing
     node.set('matrixA', str(worldMatrix.v1.x))
     node.set('matrixB', str(-worldMatrix.v1.y))
@@ -359,7 +449,9 @@ def PreDefineContainer(obj, obj_node):
 
     obj_node.set('name', ObjectName)
     obj_node.set('className', (GetUserData(obj, "className")))
-    obj_node.set('group', ToIntStr(GetUserData(obj, "group")))
+    
+    obj_node.set('group', getGroupByParent(obj))
+    
     obj_node.set('atlas', (GetUserData(obj, "atlas")))
     obj_node.set('atlas', (GetUserData(obj, "blendMode")))
     obj_node.set('spriteCount', ToIntStr(getChildCount(obj)))
@@ -429,12 +521,14 @@ def PreDefineBoxCollision(obj, obj_node):
     print("==============")
 
 def PreDefineImage(obj, obj_node):
-    obj_node.tag = 'Image'
-    ObjectName = 'Image'
-    print(obj.GetName(), type(obj))
+    className = GetUserData(obj, "className", False)
+
+    obj_node.tag = className
+    ObjectName = className
+    #print(obj.GetName(), type(obj))
     obj_node.set('name', ObjectName)
 
-    print (type(obj).__name__)
+    #print (type(obj).__name__)
 
     SampleReference = GetUserData(obj, "Sample Reference")
     isSample = GetUserData(SampleReference, "IsSpriteSheetSample")
@@ -450,23 +544,27 @@ def PreDefineImage(obj, obj_node):
     else:
         obj_node.set('type', "Polygon")
 
-    obj_node.set('className', "Image")
-    obj_node.set('texture', SpriteName)
+    obj_node.set('className', className)
+
+    if className == 'EffectArt':
+        obj_node.set('texture', Atlas)
+    else:
+        obj_node.set('texture', SpriteName)
+
+    if className == 'LightSprite':
+        obj_node.set('radius', str(GetUserData(obj, "radius", False)))
+
     obj_node.set('atlas', Atlas)
 
     obj_node.set('transformMode', "normal")
 
-    obj_node.set('x', str(obj.GetAbsPos().x))
-    obj_node.set('y', str(-obj.GetAbsPos().y))
-    obj_node.set('rotation', str(obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]))
-    obj_node.set('scaleX', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]))
-    obj_node.set('scaleY', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]))
+    SetElementTransform(obj, obj_node)
 
     # Get the vertex map tag by name
     vtag = obj.GetTag(c4d.Tvertexcolor)
 
-    print('--------------------------------')
-    print('Tag ', vtag)
+    #print('--------------------------------')
+    #print('Tag ', vtag)
 
     # Get the number of fields in the Vertex Color Tag
     fields = vtag[c4d.ID_VERTEXCOLOR_FIELDS]
@@ -487,10 +585,82 @@ def PreDefineImage(obj, obj_node):
         SetPolygonVertexData(obj, obj_node, SampleReference)
 
     Convert3DMatrixTo2DMatrix(obj, obj_node)
+    print("==============")
+    print("IMAGE PROCESSED")
+    print("==============")
 
 def BoundsString(x, y, w, h):
     BoundsStr = "(x=" + str(x) + ", " + "y=" + str(y) + ", " + "w=" + str(w) + ", " + "h=" + str(h) + ")"
     return BoundsStr
+
+def PreDefineGameObject(obj, obj_node):
+    className = GetUserData(obj, "className", False)
+
+    obj_node.tag = className.split('.')[-1]
+    ObjectName = obj.GetName()
+
+    print(obj.GetName(), type(obj))
+    obj_node.set('name', ObjectName)
+
+    #print(className)
+
+    #SampleReference = GetUserData(obj, "Sample Reference")
+
+    obj_node.set('className', className)
+
+    SetElementTransform(obj, obj_node)
+
+    obj_node.set("scaleOffsetX", str(1))
+    obj_node.set("scaleOffsetY", str(1))
+
+    UserDataValues = get_userdata_values(obj, "Game Properties")
+    obj_node.set('group', getGroupByParent(obj))
+    
+    for name, value in UserDataValues.items():
+        if name not in ["name", "width", "height"]:
+            #print('UserData', "{}: {}".format(name, value))
+            obj_node.set(name, value)
+
+    bounds = defineObjectBounds(obj)
+
+    if bounds is not None:
+        if(bounds[0] == "circle"):
+            obj_node.set("radius", str(bounds[1]))
+            obj_node.set("width", str(bounds[1]))
+            obj_node.set("height", str(bounds[1]))
+            obj_node.set("shapeType", "Circle")
+        else:
+            obj_node.set("width", str(bounds[1].x))
+            obj_node.set("height", str(bounds[1].y))
+            obj_node.set("shapeType", "Box")
+
+    print("==============")
+    print("GAME OBJECT PROCESSED")
+    print("==============")
+
+def defineObjectBounds(obj):
+    # Get the bounding box of the object
+    BoundObject = getChildByName(obj, "Bounds")
+
+    if BoundObject is None:
+        #print("object is None", c4d.Osplinecircle)
+        return [None, None]
+    elif BoundObject.GetType() == c4d.Osplinecircle:
+        #print("object is Circle", BoundObject.GetType())
+        return ["circle", BoundObject.GetRad().x]
+    elif BoundObject.GetType() == c4d.Osplinerectangle:
+        #print("object is box", BoundObject.GetType())
+        return ["box", BoundObject.GetRad() * 2]
+    else:
+        #print("object is Anything", BoundObject.GetType(), BoundObject.GetName())
+        return ["box", BoundObject.GetRad() * 2]
+
+def SetElementTransform(obj, obj_node):
+    obj_node.set('x', str(obj.GetAbsPos().x))
+    obj_node.set('y', str(-obj.GetAbsPos().y))
+    obj_node.set('rotation', str(obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]))
+    obj_node.set('scaleX', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]))
+    obj_node.set('scaleY', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]))
 
 #Define if object should generate XML node with information othetwise it will be ignored (beside it's childen will be processes)
 def ShouldGenerateNode(obj):
@@ -514,9 +684,7 @@ def ShouldGenerateNode(obj):
         return True
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
         return True
-    elif(ObjectID == "EffectArt"):
-        return True
-    elif(ObjectID == "LightSprite"):
+    elif((GetUserData(obj, "IsGameObject", False)) == True):
         return True
     else:
         return False
@@ -538,25 +706,17 @@ def PreDefineObjectType(obj, obj_node):
         PreDefineContainer(obj, obj_node)
 
     #Images inside containers
-    #elif(str(GetUserData(obj, "className", False)) == "Image"):
-        #PreDefineImage(obj, obj_node)
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
         PreDefineImage(obj, obj_node)
+    elif((GetUserData(obj, "IsGameObject", False)) == True):
+        PreDefineGameObject(obj, obj_node)
 
-    #if(ObjectID == "Group"):
-        #ProcessGroup(obj)
-    #if(ObjectID == "Image"):
-        #ProcesImage(obj)
-    #if(ObjectID == "EffectArt"):
-        #ProcessEffectArt(obj)
-    #if(ObjectID == "LightSprite"):
-        #ProcessLightSprite(obj)
 
 def parse_objects(obj, parent_node, GenerateNode, indent=0):
-    """
-    This function recursively parses through all children of the given object
-    and creates an XML describing their position, rotation, scale, and any user data.
-    """
+
+    #This function recursively parses through all children of the given object
+    #and creates an XML describing their position, rotation, scale, and any user data.
+
     # Create a new XML node for the current object
     ObjectID = obj.GetName().split('.')[0]
     #print(obj.GetName())
@@ -573,30 +733,6 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0):
     else:
         PassNode = parent_node;
 
-    #obj_node.set('Name',ObjectName)
-    #print(obj_node)
-
-
-    # Add the object's position, rotation, and scale to the XML node
-    #pos = obj.GetAbsPos()
-    #rot = obj.GetAbsRot()
-    #scale = obj.GetAbsScale()
-    #obj_node.set('Position', f'{pos.x},{pos.y},{pos.z}')
-    #obj_node.set('Rotation', f'{rot.x},{rot.y},{rot.z}')
-    #obj_node.set('Scale', f'{scale.x},{scale.y},{scale.z}')
-
-    # Check if the object has any user data
-    #if obj.GetUserDataContainer():
-        # Create an XML node for the user data
-    #    userdata_node = ET.SubElement(obj_node, 'UserData')
-
-        # Loop through all the user data parameters and add them to the XML node
-   #     for id, bc in obj.GetUserDataContainer():
-   #         param = bc[c4d.DESC_NAME]
-   #         userdata_node.set(param, str(obj[id]))
-
-
-    #print("Tail1")
     if(GenerateNode):
         NextIdent = indent+2
     else:
@@ -607,13 +743,6 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0):
     # Recursively parse through all children of the current object
     for child in children:
         parse_objects(child, PassNode, ShouldGenerateNode(child), NextIdent)
-
-    #if(GenerateNode):
-        #Post process the object
-        #PostDefineObjectType(obj, PassNode)
-
-
-    #print("PArsed Sub Childs")
 
     if(GenerateNode):
         # Add line breaks and indentation to the closing XML string

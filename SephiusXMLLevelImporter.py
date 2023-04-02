@@ -251,32 +251,6 @@ def GetUserData(CObject, UDName):
     return None
 
 def setUserDataFromNode(cObject, node, isRef):
-    if node.tag == "Image" or node.tag == "LightSprite" or node.tag == "EffectArt":
-        #print("Creating User Data Group")
-        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP) # Create Group
-        Cbc[c4d.DESC_NAME] = "Sprite Info"
-        Cbc[c4d.DESC_COLUMNS] = 1
-        Celement = cObject.AddUserData(Cbc)
-        cObject[Celement] = "Sprite Info"
-        userDataGroup = Celement
-
-        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Group
-        Cbc[c4d.DESC_NAME] = "IsSpriteSheetSample"
-        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
-        Celement = cObject.AddUserData(Cbc)
-        cObject[Celement] = True
-
-        SampleContainer = SamplesContainer = doc.SearchObject(str(node.get("atlas")) + " Samples")
-        SampleReference = getChild(SampleContainer, str(node.get("texture")) + "_Sample")
-
-        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK) # Create Group
-        Cbc[c4d.DESC_NAME] = "Sample Reference"
-        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
-        Celement = cObject.AddUserData(Cbc)
-        cObject[Celement] = SampleReference
-
     for attribute in node.attrib.keys():
         userDataGroup = None
         GroupName = None
@@ -330,17 +304,17 @@ def setUserDataFromNode(cObject, node, isRef):
             FinalValue = float(node.attrib.get(attribute))
             dataType = c4d.DTYPE_REAL
         except:
-            if node.attrib.get(attribute) == "False":
+            if node.attrib.get(attribute) == "false":
                 dataType = c4d.DTYPE_BOOL
-                FinalValue = bool(node.attrib.get(attribute))
-            elif node.attrib.get(attribute) == "True":
+                FinalValue = False
+            elif node.attrib.get(attribute) == "true":
                 dataType = c4d.DTYPE_BOOL
-                FinalValue = bool(node.attrib.get(attribute))
+                FinalValue = True
             else:
                 dataType = c4d.DTYPE_STRING
                 FinalValue = str(node.attrib.get(attribute))
 
-        #Add UserData storing Atlas Information to the Sample Container
+        #Add UserData storing
         Cbc = c4d.GetCustomDataTypeDefault(dataType) # Create Group
         Cbc[c4d.DESC_NAME] = attribute
         Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
@@ -349,6 +323,61 @@ def setUserDataFromNode(cObject, node, isRef):
             Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = FinalValue
+
+    if node.get("className") is None:
+        userDataGroup = GetUserData(cObject, "Game Properties")
+
+        #Add UserData storing
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING) # Create Group
+        Cbc[c4d.DESC_NAME] = "className"
+        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Celement = cObject.AddUserData(Cbc)
+        cObject[Celement] = node.tag
+
+    if node.tag == "Image" or node.tag == "LightSprite" or node.tag == "EffectArt":
+        #print("Creating User Data Group")
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP) # Create Group
+        Cbc[c4d.DESC_NAME] = "Sprite Info"
+        Cbc[c4d.DESC_COLUMNS] = 1
+        Celement = cObject.AddUserData(Cbc)
+        cObject[Celement] = "Sprite Info"
+        userDataGroup = Celement
+
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Group
+        Cbc[c4d.DESC_NAME] = "IsSpriteSheetSample"
+        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Celement = cObject.AddUserData(Cbc)
+        cObject[Celement] = True
+
+        SampleContainer = SamplesContainer = doc.SearchObject(str(node.get("atlas")) + " Samples")
+        SampleReference = getChild(SampleContainer, str(node.get("texture")) + "_Sample")
+
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK) # Create Group
+        Cbc[c4d.DESC_NAME] = "Sample Reference"
+        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Celement = cObject.AddUserData(Cbc)
+        cObject[Celement] = SampleReference
+
+        #if node.tag == "LightSprite":
+            #CreateBounds(cObject, node)
+    elif node.tag not in ["GameSprite", "Container", "BoxCollisions", "RawShape", "RawCollision", "BoxShape", "LevelCollision", "LevelArea", "LevelSite", "LevelBackground", "Bases", "Base", "LumaMap", "AreaMap", "LANDS OF OBLIVION", "LevelRegion"]:
+        print('fsdfadsf', node.tag)
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP) # Create Group
+        Cbc[c4d.DESC_NAME] = "GameObject Info"
+        Cbc[c4d.DESC_COLUMNS] = 1
+        Celement = cObject.AddUserData(Cbc)
+        cObject[Celement] = "GameObject Info"
+        userDataGroup = Celement
+
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Group
+        Cbc[c4d.DESC_NAME] = "IsGameObject"
+        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Celement = cObject.AddUserData(Cbc)
+        cObject[Celement] = True
 
 def CreateElementLevelRegion(node, keys, name, parent):
     CContainer = c4d.BaseObject(c4d.Onull)
@@ -387,6 +416,14 @@ def CreateElementContainer(node, keys, name, parent):
         CContainer.AddUserData(step_param)
 
         CContainer[c4d.ID_USERDATA,1] = 0.1
+
+        # Add a User Data parameter to the tag for the step value
+        step_param = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
+        step_param.SetString(c4d.DESC_NAME, "Enable Spacing")
+        step_param.SetFloat(c4d.DESC_DEFAULT, True)
+        CContainer.AddUserData(step_param)
+
+        CContainer[c4d.ID_USERDATA,2] = True
 
     elif node.tag == "Bases":
         CContainer = c4d.BaseObject(c4d.Onull)
@@ -701,8 +738,8 @@ def CreateElementContainer(node, keys, name, parent):
             CContainer[c4d.CONNECTOBJECT_WELD] = False
             CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 0
             CContainer[c4d.ID_BASEOBJECT_GENERATOR_FLAG] = False
-            
-            # Set the Python code for the tag
+
+            # Set the Python code for the tag DONT REMOVE THE CODE BELLOW!!!
             pythonCode = """
 
 import c4d
@@ -713,27 +750,32 @@ intCount = 0
 def main():
     # Get the owner object
     owner = op.GetObject()
-    
+
     global intCount
     intCount = 0
-    
+
     recursive_iteration(owner)
 
     c4d.EventAdd()
 
 def recursive_iteration(obj):
     # Set the step value for distributing the children using local spacing and user data that exist in the Level Region container (root container)
-    
+
+    organizeSamples = op[c4d.ID_USERDATA,2][c4d.ID_USERDATA,2]
+
+    if organizeSamples == False:
+        return
+
     step = op[c4d.ID_USERDATA,1] + op[c4d.ID_USERDATA,2][c4d.ID_USERDATA,1]
     global intCount
     # Update the current object's Z position
     obj[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Z] = intCount * step
-    print(obj.GetName(), intCount)
+    #print(obj.GetName(), intCount)
 
     # Iterate through the object's children and call the recursive function
     child = obj.GetDown()
     while child:
-        
+
         intCount += 1
         recursive_iteration(child)
         child = child.GetNext()
@@ -744,7 +786,7 @@ if __name__ == '__main__':
         """
             # Add the tag to the selected object
             addPythonTagWithCode(CContainer, node, pythonCode)
-            
+
             for viewNode in node.iter("View"):
                 for attiName in viewNode.attrib.keys():
                     node.set(attiName, viewNode.get(attiName))
@@ -829,10 +871,10 @@ if __name__ == '__main__':
                 CGroupContainer.SetName(CGName)
                 CGroupContainer.InsertUnder(parent)
                 CGroupContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-            
+
             #Move container to back/front depending on their group, this emulates the parallax effect from SephiusEngine
             CGroupContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = getGroupZPos(node.get("group"))
-            
+
             if node.tag != "GameSprite":
                 #print(node.tag)
                 OGName = node.tag + "s"
@@ -856,7 +898,7 @@ if __name__ == '__main__':
                 CContainer.InsertUnder(CGroupContainer)
         else:
             print('object: ', node.tag, 'has no group property')
-        
+
         #Put Object on a layer and with a specified collor
         CContainer[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
@@ -963,19 +1005,19 @@ if __name__ == '__main__':
         CContainer[c4d.INSTANCEOBJECT_RENDERINSTANCE_MODE] = 1
         CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-        
+
         SampleReference = doc.SearchObject(name)
         print(SampleReference)
         CContainer[c4d.INSTANCEOBJECT_LINK] = SampleReference
-        
+
         CContainer[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_X] = float(node.get("x"))
         CContainer[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Y] = -float(node.get("y"))
         CContainer[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = float(node.get("rotation"))
         CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X] = float(node.get("scaleX"))
         CContainer[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y] = float(node.get("scaleY"))
-        
+
         setColorTagWithData(CContainer, node)
-        
+
         AutoSetUserData = True
         FinalContainer = CContainer
 
@@ -1078,7 +1120,7 @@ def addPythonTagWithCode(obj, node, texCode):
     step_param.SetFloat(c4d.DESC_STEP, 0.1)
     step_param.SetFloat(c4d.DESC_DEFAULT, 0)
     pythonTag.AddUserData(step_param)
-    
+
     pythonTag[c4d.ID_USERDATA,1] = getLocalSpacing(node.get("group"))
 
     #Level Region container (root container)
@@ -1086,7 +1128,7 @@ def addPythonTagWithCode(obj, node, texCode):
     RootParam.SetString(c4d.DESC_NAME, "Region Root")
     RootParam[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
     Celement = pythonTag.AddUserData(RootParam)
-    
+
     pythonTag[Celement] = doc.SearchObject(RegionName)
 
     # Set the Python code for the tag
@@ -1094,7 +1136,7 @@ def addPythonTagWithCode(obj, node, texCode):
 
     # Add the tag to the selected object
     obj.InsertTag(pythonTag)
-    
+
 def setColorTagWithData(CContainer, data):
     #See if object has Transparency or Color
     cAlpha = float(data.get("alpha"))
@@ -1225,7 +1267,10 @@ def SetPolygon(SampleNode, CObject, UVWTag, Polygon):
     CObject.Message (c4d.MSG_UPDATE)
 
 def CreateBounds(ParentObject, node):
-    if(node.get("width")):
+    if(node.get("radius")):
+        boundsStrW = float(node.get("radius"))
+        node.set("shapeType", "Circle")
+    elif(node.get("width")):
         boundsStrW = float(node.get("width"))
         boundsStrH = float(node.get("height"))
     else:
@@ -1244,7 +1289,7 @@ def CreateBounds(ParentObject, node):
         CBounds[c4d.PRIM_RECTANGLE_WIDTH] = boundsStrW
         CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = boundsStrH
 
-    CBounds.SetName("Bounds." + ParentObject.GetName())
+    CBounds.SetName("Bounds")
     CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
     CBounds[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
     CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
