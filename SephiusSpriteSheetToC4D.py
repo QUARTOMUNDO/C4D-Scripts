@@ -66,7 +66,7 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     CPW = float(TextureNode.attrib.get("width")) * 0.5
     CPH = -float(TextureNode.attrib.get("height")) * 0.5
 
-    print(ScaleRatio)
+    #print(ScaleRatio)
 
     CX = CX * ScaleRatio
     CY = CY * ScaleRatio
@@ -81,28 +81,11 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     PSs.append(c4d.Vector(hX, hY, 0) + pivotDiff)
     PSs.append(c4d.Vector(pX, hY, 0) + pivotDiff)
 
-    if not Polygon:
-        Polygon = c4d.CPolygon(0, 1, 2, 3)
-        Polygon.__init__(0, 1, 2, 3)
-        CObject.ResizeObject(4, 1)
-        CObject.SetPolygon(0, Polygon)
-
-    pcount = CObject.GetPointCount()
-    point = CObject.GetAllPoints()
-    for i in range(pcount):
-        CObject.SetPoint(i, PSs[i])
-
-    #Update object. Need to update bound box for selection and etc.
-    CObject.Message (c4d.MSG_UPDATE)
-
     #print("UV Coord px: ", float(TextureNode.attrib.get("x")), float(TextureNode.attrib.get("y")), float(TextureNode.attrib.get("width")), float(TextureNode.attrib.get("height")))
     CoX = float(TextureNode.attrib.get("x")) * ScaleRatio / AtlasWidth
     CoY = float(TextureNode.attrib.get("y"))  * ScaleRatio/ AtlasHeight
     CoHX = (float(TextureNode.attrib.get("x")) + float(TextureNode.attrib.get("width"))) * ScaleRatio / AtlasWidth
     CoHY = (float(TextureNode.attrib.get("y")) + float(TextureNode.attrib.get("height"))) * ScaleRatio / AtlasHeight
-
-    #print("Atlas: ", AtlasWidth, AtlasHeight)
-    #print("UVW: ", CoX, CoY, CoHX, CoHY)
 
     PCSs = []
     PCSs.append(c4d.Vector(CoX, CoY, 0))
@@ -110,14 +93,30 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     PCSs.append(c4d.Vector(CoHX, CoHY, 0))
     PCSs.append(c4d.Vector(CoX, CoHY, 0))
 
+    #Update object. Need to update bound box for selection and etc.
+    #CObject.Message (c4d.MSG_UPDATE)
+
+    #print("Atlas: ", AtlasWidth, AtlasHeight)
+    #print("UVW: ", CoX, CoY, CoHX, CoHY)
+
+    if not Polygon:
+        Polygon = c4d.CPolygon(0, 1, 2, 3)
+        Polygon.__init__(0, 1, 2, 3)
+        CObject.ResizeObject(4, 1)
+        CObject.SetPolygon(0, Polygon)
+
     if not UVWTag:
         UVWTag = CObject.MakeVariableTag(c4d.Tuvw, 1)
         UVWTag[c4d.ID_BASELIST_NAME] = "SampleUVW"
+        CObject.InsertTag(UVWTag)
+
+    pcount = CObject.GetPointCount()
+    point = CObject.GetAllPoints()
+    #print(pcount)
+    for i in range(pcount):
+        CObject.SetPoint(i, PSs[i])
 
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
-
-    #if CObject and CObject.GetUp() and CObject.GetUp().GetName() == ParentName:
-        #CObject[c4d.ID_BASEOBJECT_REL_POSITION] = CObject[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
 
 #Return true if object has a user data name and value is equal to desired
 def HasUserData(CObject, UDName):
@@ -146,7 +145,7 @@ def UserDataAndNameCheck(CObject, OName, UDName, Value):
         #return False
     #if CObject.GetUp().GetName() != CObject[atlasName] + " Samples":
         #return False
-    print(UserDataCheck(CObject, UDName, Value), UDName, Value)
+    #print(UserDataCheck(CObject, UDName, Value), UDName, Value)
     if not UserDataCheck(CObject, UDName, Value):
         return False
     if not CObject.GetName().split(".")[0] == OName:
@@ -217,6 +216,51 @@ def GetUserData(CObject, UDName):
             return id
 
     return None
+
+def setColorTagWithData(CContainer):
+    cAlpha = 1
+
+    #CTag = c4d.BaseTag(c4d.Tvertexcolor)
+    #CTag.SetName()
+
+    #CTag.SetPerPointMode(False)
+    #CTag.SetPerPointMode(True)
+    #CTag.SetPerPointMode(False)
+
+    #Enable Color Tag Fields
+    CTag = c4d.VertexColorTag(CContainer.GetPointCount())
+    CTag.__init__(CContainer.GetPointCount())    
+    CContainer.InsertTag(CTag)
+    
+    CTag[c4d.ID_VERTEXCOLOR_USEFIELDS] = True
+    CTag[c4d.ID_VERTEXCOLOR_ALPHAMODE] = True
+    
+    # Create a new solid field layer
+    FieldAlpha = c4d.BaseList2D(c4d.FLsolid)
+    FieldAlpha.SetName("Alpha")
+
+    # Set the color of the solid field to red
+    FieldAlpha[c4d.FIELDLAYER_SOLID_COLOR] = c4d.Vector(1, 1, 1)
+
+    # Set the opacity value
+    FieldAlpha.SetStrength(cAlpha)
+
+    FieldColor = c4d.BaseList2D(c4d.FLcolorize)
+    FieldColor[c4d.FIELDLAYER_COLORIZE_MODE] = 1
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORBASE] = c4d.Vector(1, 1, 1)
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP] = c4d.Vector(1, 1, 1)
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP_MODE] = 1
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP_DENSITY] = 1
+    FieldColor[c4d.FIELDLAYER_COLORIZE_CLIP] = True
+    #FieldColorlamp[c4d.FIELDLAYER_CLAMP_MIN_VALUE] = 1
+    FieldColor.SetName("Color")
+
+    # Add a new Field to the tag
+    # Get the Vertex Color Field container
+    CTag_field_container = CTag.GetParameter(c4d.ID_VERTEXCOLOR_FIELDS, 0)
+    CTag_field_container.InsertLayer(FieldAlpha)
+    CTag_field_container.InsertLayer(FieldColor)
+    CTag[c4d.ID_VERTEXCOLOR_FIELDS] = CTag_field_container
 
 def main():
     global ScaleRatio
@@ -366,29 +410,38 @@ def main():
         AtlasMaterial = c4d.BaseMaterial(c4d.Mmaterial)
         AtlasMaterial.SetName( FileName + " Material" )
 
-    MShaderD = c4d.BaseList2D(c4d.Xbitmap)
-    MShaderD[c4d.BITMAPSHADER_FILENAME]  = folderPath + FileName + ".png"
-    AtlasMaterial.InsertShader( MShaderD )
-    AtlasMaterial[c4d.MATERIAL_COLOR_SHADER]  = MShaderD
+    TextureShaderDifuse = c4d.BaseList2D(c4d.Xbitmap)
+    TextureShaderDifuse[c4d.BITMAPSHADER_FILENAME]  = FileName + ".png"
+
+    TextureShaderAlpha = c4d.BaseList2D(c4d.Xbitmap)
+    TextureShaderAlpha[c4d.BITMAPSHADER_FILENAME]  = FileName + ".png"
+
+    FusionShaderDifuse = c4d.BaseList2D(c4d.Xfusion)
+    FusionShaderDifuse[c4d.SLA_FUSION_BASE_CHANNEL]  = TextureShaderDifuse
+    FusionShaderDifuse[c4d.SLA_FUSION_MODE] = c4d.SLA_FUSION_MODE_MULTIPLY
+
+    FusionShaderAlpha = c4d.BaseList2D(c4d.Xfusion)
+    FusionShaderAlpha[c4d.SLA_FUSION_BASE_CHANNEL]  = TextureShaderAlpha
+    FusionShaderAlpha[c4d.SLA_FUSION_MODE] = c4d.SLA_FUSION_MODE_MULTIPLY
 
     # Create Material or Update the Existing one
     AtlasMaterial[c4d.MATERIAL_USE_ALPHA] = True
     AtlasMaterial[c4d.MATERIAL_USE_REFLECTION] = False
     AtlasMaterial[c4d.MATERIAL_PREVIEWSIZE] = 13
-    AtlasMaterial[c4d.MATERIAL_USE_TRANSPARENCY] = True
+    AtlasMaterial[c4d.MATERIAL_USE_TRANSPARENCY] = False
     AtlasMaterial[c4d.MATERIAL_TRANSPARENCY_BRIGHTNESS] = 0
 
-    MShaderA = c4d.BaseList2D(c4d.Xbitmap)
-    MShaderA[c4d.BITMAPSHADER_FILENAME]  = folderPath + FileName + ".png"
-
+    #Configure Texture shader for use alpha channel
     LayerSet = c4d.LayerSet()
     LayerSet.SetMode(c4d.LAYERSETMODE_LAYERALPHA)
-    MShaderA[c4d.BITMAPSHADER_LAYERSET] = LayerSet
-    MShaderA[c4d.BITMAPSHADER_BLACKPOINT] = 1
-    MShaderA[c4d.BITMAPSHADER_WHITEPOINT] = 0
+    TextureShaderAlpha[c4d.BITMAPSHADER_LAYERSET] = LayerSet
 
-    AtlasMaterial.InsertShader( MShaderA )
-    AtlasMaterial[c4d.MATERIAL_TRANSPARENCY_SHADER] = MShaderA
+    AtlasMaterial.InsertShader( TextureShaderAlpha )
+    AtlasMaterial.InsertShader( TextureShaderDifuse )
+    AtlasMaterial.InsertShader( FusionShaderDifuse )
+    AtlasMaterial.InsertShader( FusionShaderAlpha )
+    AtlasMaterial[c4d.MATERIAL_COLOR_SHADER]  = FusionShaderDifuse
+    AtlasMaterial[c4d.MATERIAL_ALPHA_SHADER] = FusionShaderAlpha
 
     MVCTag = None
 
@@ -434,7 +487,7 @@ def main():
             #see if is a polygon object, if not should not update as existing sample
             isPolygonObject = c4d.PolygonObject == type(Csample)
 
-            print("hasExistingSamples: ", hasExistingSamples, currenName, Csample.GetName())
+            #print("hasExistingSamples: ", hasExistingSamples, currenName, Csample.GetName())
 
             SParent = Csample.GetUp()
 
@@ -524,8 +577,20 @@ def main():
 
         if not hasExistingSamples:
             #print("Don´t have Existing Samples: ", hasExistingSamples, currenName)
-            #Set the Sample
+            #Create a quad polygon by creating a plane then set it as editable
+            #QuadPolygon = c4d.BaseObject(c4d.Oplane)
+            #QuadPolygon[c4d.PRIM_PLANE_SUBW] = 1
+            #QuadPolygon[c4d.PRIM_PLANE_SUBH] = 1
+            #QuadPolygon[c4d.PRIM_AXIS] = c4d.PRIM_AXIS_ZN
+
+            #Csample = c4d.utils.SendModelingCommand(command = c4d.MCOMMAND_MAKEEDITABLE, list = [QuadPolygon], mode = c4d.MODELINGCOMMANDMODE_ALL, bc = c4d.BaseContainer(), doc = doc)[0]
+            #Csample.Message(c4d.MSG_UPDATE)
+
             Csample = c4d.BaseObject(c4d.Opolygon)
+
+            # If the editable object exists, insert it into the document
+            #QuadPolygon.Remove()
+
             Csample.SetName(currenName + "_Sample")
 
             Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
@@ -574,7 +639,7 @@ def main():
             bc[c4d.DESC_PARENTGROUP] = C2element
             element = Csample.AddUserData(bc)
             Csample[element] = currenName
-            
+
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
             bc[c4d.DESC_NAME] = "blendMode"
             bc[c4d.DESC_SHORT_NAME] = "blendMode"
@@ -736,20 +801,22 @@ def main():
             else:
                 Csample[element] = float(node.attrib.get("height")) * ScaleRatio
 
-            MVCTag = c4d.VertexColorTag(4)
-            MVCTag.__init__(4)
-            Csample.InsertTag(MVCTag)
-            VCdata = MVCTag.GetDataAddressW()
-            white = c4d.Vector(1.0, 1.0, 1.0)
+            setColorTagWithData(Csample)
 
-            pointCount = Csample.GetPointCount()
-            for idx in range(pointCount):
-              MVCTag.SetColor(VCdata, None, None, idx, white)
-              MVCTag.SetAlpha(VCdata, None, None, idx, 1)
+            #MVCTag = c4d.VertexColorTag(4)
+            #MVCTag.__init__(4)
+            #Csample.InsertTag(MVCTag)
+            #VCdata = MVCTag.GetDataAddressW()
+            #white = c4d.Vector(1.0, 1.0, 1.0)
+
+            #pointCount = Csample.GetPointCount()
+            #for idx in range(pointCount):
+              #MVCTag.SetColor(VCdata, None, None, idx, white)
+              #MVCTag.SetAlpha(VCdata, None, None, idx, 1)
 
             c4d.EventAdd()
 
-            MVCTag.SetPerPointMode(False)
+            #MVCTag.SetPerPointMode(False)
 
             CTag = Csample.MakeTag(c4d.Ttexture)
             CTag[c4d.TEXTURETAG_PROJECTION] = 6
@@ -832,20 +899,22 @@ def main():
         PCSs.append(c4d.Vector(1, 0, 0))
         PCSs.append(c4d.Vector(0, 0, 0))
 
-        MVCTag = c4d.VertexColorTag(4)
-        MVCTag.__init__(4)
-        CAtlas.InsertTag(MVCTag)
-        VCdata = MVCTag.GetDataAddressW()
-        white = c4d.Vector(1.0, 1.0, 1.0)
+        setColorTagWithData(CAtlas)
 
-        pointCount = CAtlas.GetPointCount()
-        for idx in range(pointCount):
-          MVCTag.SetColor(VCdata, None, None, idx, white)
-          MVCTag.SetAlpha(VCdata, None, None, idx, 1)
+        #MVCTag = c4d.VertexColorTag(4)
+        #MVCTag.__init__(4)
+        #CAtlas.InsertTag(MVCTag)
+        #VCdata = MVCTag.GetDataAddressW()
+        #white = c4d.Vector(1.0, 1.0, 1.0)
+
+        #pointCount = CAtlas.GetPointCount()
+        #for idx in range(pointCount):
+          #MVCTag.SetColor(VCdata, None, None, idx, white)
+          #MVCTag.SetAlpha(VCdata, None, None, idx, 1)
 
         c4d.EventAdd()
 
-        MVCTag.SetPerPointMode(False)
+        #MVCTag.SetPerPointMode(False)
 
         UVWTag = CAtlas.MakeVariableTag(c4d.Tuvw, 1)
         UVWTag[c4d.ID_BASELIST_NAME] = "SampleUVW"
@@ -883,16 +952,27 @@ def main():
     CAtlas.InsertUnder(SamplesContainer)
     doc.AddUndo(c4d.UNDOTYPE_NEW, CAtlas)
 
-    MShaderT = c4d.BaseList2D(c4d.Xvertexmap)
-    MShaderT[c4d.SLA_DIRTY_VMAP_OBJECT] = MVCTag
-    AtlasMaterial.InsertShader( MShaderT )
-    AtlasMaterial[c4d.MATERIAL_ALPHA_SHADER] = MShaderT
+    VertexShaderDifuse = c4d.BaseList2D(c4d.Xvertexmap)
+    VertexShaderAlpha = c4d.BaseList2D(c4d.Xvertexmap)
+    AtlasMaterial.InsertShader( VertexShaderDifuse )
+    AtlasMaterial.InsertShader( VertexShaderAlpha )
+
+    FusionShaderDifuse[c4d.SLA_FUSION_BLEND_CHANNEL]  = VertexShaderDifuse
+    FusionShaderAlpha[c4d.SLA_FUSION_BLEND_CHANNEL]  = VertexShaderAlpha
+    
+    TVertexcolor = CAtlas.GetTag(c4d.Tvertexcolor)
+    print('TVertexcolor', TVertexcolor, CAtlas)
+    VertexShaderDifuse[c4d.SLA_DIRTY_VMAP_OBJECT]  = TVertexcolor
+    VertexShaderAlpha[c4d.SLA_DIRTY_VMAP_OBJECT]  = TVertexcolor
+
     AtlasMaterial.Message( c4d.MSG_UPDATE )
     AtlasMaterial.Update( True, True )
 
     CAtlas[c4d.PRIM_PLANE_WIDTH] = float(AtlasWidth)
     CAtlas[c4d.PRIM_PLANE_HEIGHT] = float(AtlasHeight)
-
+    CAtlas[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] = c4d.OBJECT_OFF
+    
+    
     doc.EndUndo()
     c4d.EventAdd()
 
