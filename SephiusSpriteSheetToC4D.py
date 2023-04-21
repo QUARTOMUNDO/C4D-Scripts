@@ -229,12 +229,12 @@ def setColorTagWithData(CContainer):
 
     #Enable Color Tag Fields
     CTag = c4d.VertexColorTag(CContainer.GetPointCount())
-    CTag.__init__(CContainer.GetPointCount())    
+    CTag.__init__(CContainer.GetPointCount())
     CContainer.InsertTag(CTag)
-    
+
     CTag[c4d.ID_VERTEXCOLOR_USEFIELDS] = True
     CTag[c4d.ID_VERTEXCOLOR_ALPHAMODE] = True
-    
+
     # Create a new solid field layer
     FieldAlpha = c4d.BaseList2D(c4d.FLsolid)
     FieldAlpha.SetName("Alpha")
@@ -323,7 +323,7 @@ def main():
     if not hasTextureAtlas:
         print(gui.MessageDialog("XML does not have TextureAtlas information"))
         return
-
+    
     #Start Undo. This allow C4D to start to store actions in order to allow undo
     doc.StartUndo()
     #Create a Sample Container to collect all our samples. It it alrearyExist Just use the actual one.
@@ -469,6 +469,12 @@ def main():
     #Create the Samples
     for node in tree.iter("SubTexture"):
         currenName = node.attrib.get("name")
+        
+        print(currenName, len(currenName.split("_")))
+        
+        if len(currenName.split("_")) > 2:
+            return gui.MessageDialog("Sub textues (samples) name patern is wrong. Should be like 'Atlas_TexName', have just one '_' divisor. This sample " + currenName + " have more.")
+               
         CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
         CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
 
@@ -505,6 +511,7 @@ def main():
                 Csample.InsertTag(CTag, MVCTag)
 
                 oldPivotDiff = Csample[c4d.ID_USERDATA,2]
+                #print("oldPivotDiff", Csample, oldPivotDiff)
                 Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + oldPivotDiff
 
                 if SParent == SamplesContainer:
@@ -604,66 +611,85 @@ def main():
             SetPolygon(FileName + " Samples", Csample, None, None, node, AtlasWidth, AtlasHeight)
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "Sprite Info"
-            bc[c4d.DESC_SHORT_NAME] = "Sprite Info"
+            bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
+            bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_DEFAULT] = True
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_COLUMNS] = 1
-            C2element = Csample.AddUserData(bc)
-            Csample[C2element] = "Sprite Info"
+            ObjectExportGroup = Csample.AddUserData(bc)
+            Csample[ObjectExportGroup] = "OBJECT EXPORT INFO"
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+            bc[c4d.DESC_NAME] = "GAME PROPERTIES"
+            bc[c4d.DESC_SHORT_NAME] = "GAME PROPERTIES"
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_DEFAULT] = True
+            bc[c4d.DESC_TITLEBAR] = True
+            bc[c4d.DESC_COLUMNS] = 1
+            GamePropertiesGroup = Csample.AddUserData(bc)
+            Csample[GamePropertiesGroup] = "GAME PROPERTIES"
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
             bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
             bc[c4d.DESC_SHORT_NAME] = "IsSpriteSheetSample"
             bc[c4d.DESC_EDITABLE] = False
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = C2element
+            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
             element = Csample.AddUserData(bc)
             Csample[element] = True
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "Atlas"
-            bc[c4d.DESC_SHORT_NAME] = "Atlas"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = C2element
-            element = Csample.AddUserData(bc)
-            Csample[element] = FileName
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "Sprite Name"
-            bc[c4d.DESC_SHORT_NAME] = "Sprite Name"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = C2element
-            element = Csample.AddUserData(bc)
-            Csample[element] = currenName
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "blendMode"
-            bc[c4d.DESC_SHORT_NAME] = "blendMode"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = C2element
-            element = Csample.AddUserData(bc)
-            Csample[element] = "normal"
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
             bc[c4d.DESC_NAME] = "Sample Reference"
             bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
             bc[c4d.DESC_EDITABLE] = False
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = C2element
+            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
             element = Csample.AddUserData(bc)
             Csample[element] = Csample
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+            bc[c4d.DESC_NAME] = "className"
+            bc[c4d.DESC_SHORT_NAME] = "className"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+            element = Csample.AddUserData(bc)
+            Csample[element] = "Image"
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+            bc[c4d.DESC_NAME] = "texture"
+            bc[c4d.DESC_SHORT_NAME] = "texture"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+            element = Csample.AddUserData(bc)
+            Csample[element] = currenName
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+            bc[c4d.DESC_NAME] = "Atlas"
+            bc[c4d.DESC_SHORT_NAME] = "Atlas"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+            element = Csample.AddUserData(bc)
+            Csample[element] = FileName
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+            bc[c4d.DESC_NAME] = "blendMode"
+            bc[c4d.DESC_SHORT_NAME] = "blendMode"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+            element = Csample.AddUserData(bc)
+            Csample[element] = "normal"
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
             bc[c4d.DESC_NAME] = "Vertex Position"
             bc[c4d.DESC_SHORT_NAME] = "Vertex Position"
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_COLUMNS] = 1
-            bc[c4d.DESC_PARENTGROUP] = C2element
+            #bc[c4d.DESC_PARENTGROUP] = C2element
             VertexPositionGroup = Csample.AddUserData(bc)
 
             pcount = Csample.GetPointCount()
@@ -678,6 +704,15 @@ def main():
                 element = Csample.AddUserData(bc)
                 Csample[element] = Csample.GetPoint(i)
 
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
+            bc[c4d.DESC_NAME] = "Offset"
+            bc[c4d.DESC_SHORT_NAME] = "Offset"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_TITLEBAR] = True
+            bc[c4d.DESC_PARENTGROUP] = VertexPositionGroup
+            element = Csample.AddUserData(bc)
+            Csample[element] = pivotDiff
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
             bc[c4d.DESC_NAME] = "Vertex UVW"
@@ -685,7 +720,7 @@ def main():
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_COLUMNS] = 1
-            bc[c4d.DESC_PARENTGROUP] = C2element
+            #bc[c4d.DESC_PARENTGROUP] = C2element
             VertexUVWGroup = Csample.AddUserData(bc)
 
             UVWTag = Csample.GetTag(c4d.Tuvw)
@@ -707,23 +742,13 @@ def main():
                 else:
                     Csample[element] = VertexCoord["d"]
 
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
-            bc[c4d.DESC_NAME] = "Offset"
-            bc[c4d.DESC_SHORT_NAME] = "Offset"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_PARENTGROUP] = C2element
-            element = Csample.AddUserData(bc)
-            Csample[element] = pivotDiff
-
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
             bc[c4d.DESC_NAME] = "Texture Size"
             bc[c4d.DESC_SHORT_NAME] = "Texture Size"
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_COLUMNS] = 2
-            bc[c4d.DESC_PARENTGROUP] = C2element
+            #bc[c4d.DESC_PARENTGROUP] = C2element
             TexSizeGroup = Csample.AddUserData(bc)
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
@@ -750,7 +775,7 @@ def main():
             bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_COLUMNS] = 4
-            bc[c4d.DESC_PARENTGROUP] = C2element
+            #bc[c4d.DESC_PARENTGROUP] = C2element
             TexFrameGroup = Csample.AddUserData(bc)
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
@@ -959,7 +984,7 @@ def main():
 
     FusionShaderDifuse[c4d.SLA_FUSION_BLEND_CHANNEL]  = VertexShaderDifuse
     FusionShaderAlpha[c4d.SLA_FUSION_BLEND_CHANNEL]  = VertexShaderAlpha
-    
+
     TVertexcolor = CAtlas.GetTag(c4d.Tvertexcolor)
     print('TVertexcolor', TVertexcolor, CAtlas)
     VertexShaderDifuse[c4d.SLA_DIRTY_VMAP_OBJECT]  = TVertexcolor
@@ -971,8 +996,8 @@ def main():
     CAtlas[c4d.PRIM_PLANE_WIDTH] = float(AtlasWidth)
     CAtlas[c4d.PRIM_PLANE_HEIGHT] = float(AtlasHeight)
     CAtlas[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] = c4d.OBJECT_OFF
-    
-    
+
+
     doc.EndUndo()
     c4d.EventAdd()
 

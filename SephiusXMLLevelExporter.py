@@ -313,11 +313,11 @@ def getGroupByParent(obj):
     parent = obj.GetUp()
     if parent is None:
         return 12
-    
+
     ParentName = parent.GetName()
     if "Group" in ParentName:
         if len(ParentName.split(".")) > 1:
-            GroupName = ParentName.split(".")[1]    
+            GroupName = ParentName.split(".")[1]
             return str(GroupName)
 
     return getGroupByParent(parent)
@@ -394,7 +394,7 @@ def getChildByName(obj, name):
         if child.GetName() == name:
             return child
         child = child.GetNext()
-    raise ValueError("Object Has no Child With The Name Provided", child.GetName())
+    raise ValueError("Object Has no Child With The Name Provided", name)
     return None
 
 def PreDefineLevelArea(obj, obj_node):
@@ -421,12 +421,32 @@ def PreDefineLevelArea(obj, obj_node):
     h = Bounds.y * 2
 
     obj_node.set('bounds',   BoundsString(x, y, w, h))
-    obj_node.set('objectCount', "0")
-    obj_node.set('spritesContainersCount', "0")
-    obj_node.set('spriteCount', "0")
+    obj_node.set('objectCount', ToIntStr(getChildCount(obj)))
+    obj_node.set('spritesContainersCount', "f")
+    obj_node.set('spriteCount', "f")
 
     print("==============")
     print("AREA PROCESSED")
+    print("==============")
+
+def PreDefineLevelBackground(obj, obj_node):
+    ObjectName = obj.GetName().split('.')[0]
+
+    obj_node.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
+    obj_node.set('name', obj.GetName().split('.')[1])
+    obj_node.set('globalId',  ToIntStr(GetUserData(obj, "globalId")))
+    obj_node.set('objectCount', "Not Calculated")
+    obj_node.set('spritesContainersCount', "Not Calculated")
+    obj_node.set('spriteCount', "Not Calculated")
+    obj_node.set('x',  str(obj.GetAbsPos().x))
+    obj_node.set('y',  str(-obj.GetAbsPos().y))
+
+    obj_node.set('objectCount', ToIntStr(getChildCount(obj)))
+    obj_node.set('spritesContainersCount', "Not Calculated")
+    obj_node.set('spriteCount', "Not Calculated")
+
+    print("==============")
+    print("BACKGROUND PROCESSED")
     print("==============")
 
 def PreLevelCollision(obj, obj_node):
@@ -449,11 +469,11 @@ def PreDefineContainer(obj, obj_node):
 
     obj_node.set('name', ObjectName)
     obj_node.set('className', (GetUserData(obj, "className")))
-    
+
     obj_node.set('group', getGroupByParent(obj))
-    
+
     obj_node.set('atlas', (GetUserData(obj, "atlas")))
-    obj_node.set('atlas', (GetUserData(obj, "blendMode")))
+    obj_node.set('blendMode', (GetUserData(obj, "blendMode")))
     obj_node.set('spriteCount', ToIntStr(getChildCount(obj)))
 
     print("==============")
@@ -465,8 +485,8 @@ def PreDefineGameSprite(obj, obj_node):
 
     obj_node.set('name',  ObjectName)
     obj_node.set('group',  ToIntStr(GetUserData(obj, "group")))
-    obj_node.set('parentAreaID',  ToIntStr(GetUserData(obj, "parentAreaID")))
-    obj_node.set('alpha', str(GetUserData(obj, "alpha")))
+    #obj_node.set('parentAreaID',  ToIntStr(GetUserData(obj, "parentAreaID", False)))
+    obj_node.set('alpha', str(1))
     obj_node.set('blendMode',  str(GetUserData(obj, "blendMode")))
 
     obj_node.set('x',  str(obj.GetAbsPos().x))
@@ -515,7 +535,6 @@ def PreDefineBoxCollision(obj, obj_node):
     obj_node.set('y',  str(-obj.GetAbsPos().y))
     obj_node.set('rotation',  str(GetUserData(obj, "rotation")))
 
-
     print("==============")
     print("BOX  COLLISION PROCESSED")
     print("==============")
@@ -525,14 +544,14 @@ def PreDefineImage(obj, obj_node):
 
     obj_node.tag = className
     ObjectName = className
-    #print(obj.GetName(), type(obj))
+    print(obj.GetName(), type(obj))
     obj_node.set('name', ObjectName)
 
     #print (type(obj).__name__)
 
     SampleReference = GetUserData(obj, "Sample Reference")
     isSample = GetUserData(SampleReference, "IsSpriteSheetSample")
-    SpriteName = GetUserData(SampleReference, "Sprite Name")
+    Texture = GetUserData(SampleReference, "texture")
     Atlas = GetUserData(SampleReference, "Atlas")
 
     if (isSample == False):
@@ -549,7 +568,7 @@ def PreDefineImage(obj, obj_node):
     if className == 'EffectArt':
         obj_node.set('texture', Atlas)
     else:
-        obj_node.set('texture', SpriteName)
+        obj_node.set('texture', Texture)
 
     if className == 'LightSprite':
         obj_node.set('radius', str(GetUserData(obj, "radius", False)))
@@ -613,9 +632,9 @@ def PreDefineGameObject(obj, obj_node):
     obj_node.set("scaleOffsetX", str(1))
     obj_node.set("scaleOffsetY", str(1))
 
-    UserDataValues = get_userdata_values(obj, "Game Properties")
+    UserDataValues = get_userdata_values(obj, "GAME PROPERTIES")
     obj_node.set('group', getGroupByParent(obj))
-    
+
     for name, value in UserDataValues.items():
         if name not in ["name", "width", "height"]:
             #print('UserData', "{}: {}".format(name, value))
@@ -662,11 +681,20 @@ def SetElementTransform(obj, obj_node):
     obj_node.set('scaleX', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]))
     obj_node.set('scaleY', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]))
 
+def PreDefineBase(obj, obj_node):
+    ObjectName = obj.GetName()
+    print(obj.GetName(), type(obj))
+    
+    obj_node.set('x', str(obj.GetMg().off.x))
+    obj_node.set('y',  str(-obj.GetMg().off.y))
+
 #Define if object should generate XML node with information othetwise it will be ignored (beside it's childen will be processes)
 def ShouldGenerateNode(obj):
     ObjectID = obj.GetName().split('.')[0]
 
     if(ObjectID == "LevelArea"):
+        return True
+    elif(ObjectID == "LevelBackground"):
         return True
     elif(ObjectID == "GameSprite"):
         return True
@@ -681,6 +709,10 @@ def ShouldGenerateNode(obj):
     elif(ObjectID == "RawShape"):
         return True
     elif(ObjectID == "Container"):
+        return True
+    elif(ObjectID == "Base"):
+        return True
+    elif(ObjectID == "Bases"):
         return True
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
         return True
@@ -704,6 +736,10 @@ def PreDefineObjectType(obj, obj_node):
         PreDefineGameSprite(obj, obj_node)
     elif(ObjectID == "Container"):
         PreDefineContainer(obj, obj_node)
+    elif(ObjectID == "LevelBackground"):
+        PreDefineLevelBackground(obj, obj_node)
+    elif(ObjectID == "Base"):
+        PreDefineBase(obj, obj_node)
 
     #Images inside containers
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
@@ -754,21 +790,32 @@ def main():
     obj = doc.GetActiveObject()
 
     #stop if root object is not a site
-    if(obj.GetName().split('.')[0] != "LevelSite"):
-        raise ValueError("OBJECT SELECTED ARE NOT A LEVEL SITE")
+    if obj.GetName().split('.')[0] not in ("LevelSite", "LevelBackgrounds"):
+        raise ValueError("OBJECT SELECTED IS NOT A VALID SITE OR BACKGROUNDS")
 
     Root = get_top_parent(obj)
     RegionName = Root.GetName().replace(" ", "")
-    SiteName =  'Site' + obj.GetName().split('.')[1].replace(" ", "")
 
-    XMLFileName = RegionName + '_' + SiteName + '.xml'
-    print ('XML File Name' + XMLFileName)
+    if obj.GetName().split('.')[0] in ("LevelSite"):
+        Name =  'Site' + obj.GetName().split('.')[1].replace(" ", "")
 
-    # Create a new XML tree and root node
-    root = ET.Element('LevelAreas')
-    root.set('regionName', GetUserData(obj, "region").replace(" ", "_"))
-    root.set('siteName', obj.GetName().split('.')[1])
-    root.set('siteID', str(int(GetUserData(obj,  "id"))))
+        XMLFileName = RegionName + '_' + Name + '.xml'
+        print ('XML File Name' + XMLFileName)
+
+        # Create a new XML tree and root node
+        root = ET.Element('LevelSite')
+        root.set('regionName', GetUserData(obj, "region").replace(" ", "_"))
+        root.set('siteName', obj.GetName().split('.')[1])
+        root.set('siteID', str(int(GetUserData(obj,  "id"))))
+    else:
+        Name = 'Backgrounds'
+
+        XMLFileName = RegionName + '_Backgrounds.xml'
+        print ('XML File Name' + XMLFileName)
+
+        # Create a new XML tree and root node
+        root = ET.Element('Backgrounds')
+        root.set('regionName', RegionName)
 
     # Parse through all children of the active object
     parse_objects(obj, root, False, 2)

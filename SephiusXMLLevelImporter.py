@@ -251,7 +251,23 @@ def GetUserData(CObject, UDName):
     return None
 
 def setUserDataFromNode(cObject, node, isRef):
+    ObjectExportGroup = GetUserData(cObject, "OBJECT EXPORT INFO")
+
+    if not ObjectExportGroup:
+        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+        Cbc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
+        Cbc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
+        Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        Cbc[c4d.DESC_DEFAULT] = True
+        Cbc[c4d.DESC_TITLEBAR] = True
+        Cbc[c4d.DESC_COLUMNS] = 1
+        ObjectExportGroup = cObject.AddUserData(Cbc)
+        cObject[ObjectExportGroup] = "OBJECT EXPORT INFO"
+
     for attribute in node.attrib.keys():
+        if attribute == "name" or attribute == "alpha":
+            continue
+
         userDataGroup = None
         GroupName = None
         NumOfCollums = 1
@@ -280,7 +296,7 @@ def setUserDataFromNode(cObject, node, isRef):
             GroupName = "Statistics"
             NumOfCollums = 6
         else:
-            GroupName = "Game Properties"
+            GroupName = "GAME PROPERTIES"
 
         if (attribute == "globalID" or attribute == "scaleOffsetX" or attribute == "scaleOffsetY" or attribute == "matrixA" or attribute == "matrixB" or attribute == "matrixC" or attribute == "matrixD" or attribute == "matrixTx" or attribute == "matrixTy" or attribute == "x" or attribute == "y" or attribute == "offsetX" or attribute == "offsetY" or attribute == "skewX" or attribute == "skewY" or attribute == "scaleX" or attribute == "scaleY" or attribute == "rotation" or attribute == "parentAreaID" or attribute == "group"):
             if(isRef):
@@ -324,30 +340,21 @@ def setUserDataFromNode(cObject, node, isRef):
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = FinalValue
 
-    if node.get("className") is None:
-        userDataGroup = GetUserData(cObject, "Game Properties")
+    GamePropertiesGroup = userDataGroup = GetUserData(cObject, "GAME PROPERTIES")
 
-        #Add UserData storing
+    if node.get("className") is None:
         Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING) # Create Group
         Cbc[c4d.DESC_NAME] = "className"
         Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Cbc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = node.tag
 
     if node.tag == "Image" or node.tag == "LightSprite" or node.tag == "EffectArt":
-        #print("Creating User Data Group")
-        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP) # Create Group
-        Cbc[c4d.DESC_NAME] = "Sprite Info"
-        Cbc[c4d.DESC_COLUMNS] = 1
-        Celement = cObject.AddUserData(Cbc)
-        cObject[Celement] = "Sprite Info"
-        userDataGroup = Celement
-
         Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Group
         Cbc[c4d.DESC_NAME] = "IsSpriteSheetSample"
         Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Cbc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = True
 
@@ -357,25 +364,17 @@ def setUserDataFromNode(cObject, node, isRef):
         Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK) # Create Group
         Cbc[c4d.DESC_NAME] = "Sample Reference"
         Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Cbc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = SampleReference
 
         #if node.tag == "LightSprite":
             #CreateBounds(cObject, node)
     elif node.tag not in ["GameSprite", "Container", "BoxCollisions", "RawShape", "RawCollision", "BoxShape", "LevelCollision", "LevelArea", "LevelSite", "LevelBackground", "Bases", "Base", "LumaMap", "AreaMap", "LANDS OF OBLIVION", "LevelRegion"]:
-        print('fsdfadsf', node.tag)
-        Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP) # Create Group
-        Cbc[c4d.DESC_NAME] = "GameObject Info"
-        Cbc[c4d.DESC_COLUMNS] = 1
-        Celement = cObject.AddUserData(Cbc)
-        cObject[Celement] = "GameObject Info"
-        userDataGroup = Celement
-
         Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Group
         Cbc[c4d.DESC_NAME] = "IsGameObject"
         Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+        Cbc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
         Celement = cObject.AddUserData(Cbc)
         cObject[Celement] = True
 
@@ -739,7 +738,7 @@ def CreateElementContainer(node, keys, name, parent):
             CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 0
             CContainer[c4d.ID_BASEOBJECT_GENERATOR_FLAG] = False
 
-            # Set the Python code for the tag DONT REMOVE THE CODE BELLOW!!!
+            # Set the Python code for the tag DONT REMOVE THE CODE BELLOW!!
             pythonCode = """
 
 import c4d
