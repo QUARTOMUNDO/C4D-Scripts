@@ -157,11 +157,15 @@ def GetElementColor(tag):
     elif tag == "Base" or tag == "Bases":
         return c4d.Vector(1, 1, 1)
     elif tag == "LevelCollision":
-        return c4d.Vector(.3, 1, 1)
+        return c4d.Vector(0, 1, 0)
     elif tag == "BreakableObject":
         return c4d.Vector(1, .5, 0)
     elif tag == "Pool":
         return c4d.Vector(0, 1, 1)
+    elif tag == "DamageCollision":
+        return c4d.Vector(1, 0, .2)
+    elif tag in ["EnchantedBarrier", "SocketBarrier", "BlockedBarrier", "TriggeredBarrier"]:
+        return c4d.Vector(1, 0, 1)
     elif tag == "Pyra":
         return c4d.Vector(1, 0, .5)
     else:
@@ -370,7 +374,7 @@ def setUserDataFromNode(cObject, node, isRef):
 
         #if node.tag == "LightSprite":
             #CreateBounds(cObject, node)
-    elif node.tag not in ["GameSprite", "Container", "BoxCollisions", "RawShape", "RawCollision", "BoxShape", "LevelCollision", "LevelArea", "LevelSite", "LevelBackground", "Bases", "Base", "LumaMap", "AreaMap", "LANDS OF OBLIVION", "LevelRegion"]:
+    elif node.tag not in ["GameSprite", "Container", "BoxCollision", "DamageCollision", "RawShape", "RawCollision", "BoxShape", "LevelCollision", "LevelArea", "LevelSite", "LevelBackground", "Bases", "Base", "LumaMap", "AreaMap", "LANDS OF OBLIVION", "LevelRegion"]:
         Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL) # Create Group
         Cbc[c4d.DESC_NAME] = "IsGameObject"
         Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
@@ -389,20 +393,20 @@ def CreateElementLevelRegion(node, keys, name, parent):
 
     return FinalContainer
 
-def CreateElementContainer(node, keys, name, parent):
+def CreateElementContainer(node, name, parent):
     #print("------------------------------------------------------")
     #print("Processing: ", node, keys, name, parent)
     #print("------------------------------------------------------")
 
     FinalContainer = ""
 
-    if node.tag == "LevelRegion":
+    if name == "LevelRegion":
         CContainer = c4d.BaseObject(c4d.Onull)
         CContainer[c4d.NULLOBJECT_DISPLAY] = 2
         CContainer[c4d.NULLOBJECT_RADIUS] = 600
         CContainer[c4d.NULLOBJECT_ORIENTATION] = 0
 
-        AutoSetUserData = True
+        AutoSetUserData = False
         FinalContainer = CContainer
 
         # Add a User Data parameter to the tag for the step value
@@ -608,8 +612,23 @@ def CreateElementContainer(node, keys, name, parent):
         CContainer[c4d.NULLOBJECT_RADIUS] = 50
         CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
 
-        for node2 in node.iter("LevelArea"):
-            CreateElementContainer(node2, node2.attrib.keys(), node2.tag + "." + node2.get("globalId"), CContainer)
+        for node2 in node:
+            globalId = node2.get("globalId")
+            #print("globalId", globalId)
+            if globalId is None:
+                globalId = ""
+            else:
+                globalId = "." + globalId
+            NodeName = node2.get("name")
+            #print("NodeName", NodeName)
+            if NodeName is None:
+                NodeName = ""
+            else:
+                NodeName = "." + NodeName
+            CreateElementContainer(node2, node2.tag + globalId + NodeName, CContainer)
+
+        #for node2 in node.iter("LevelBackground"):
+            #CreateElementContainer(node2, node2.tag + "." + node2.get("globalId"), CContainer)
 
         AutoSetUserData = True
         FinalContainer = CContainer
@@ -626,20 +645,21 @@ def CreateElementContainer(node, keys, name, parent):
         CContainer[c4d.NULLOBJECT_RADIUS] = 200
         CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
 
-        #print(node.tag)
+        print("BackGround ", node.tag)
         BBGName = node.tag + "s"
-        BBGGroupContainer = getChild(parent, BBGName)
+        #BGGroupContainer = getChild(parent, BBGName)
 
-        if not BBGGroupContainer:
-            BBGGroupContainer = c4d.BaseObject(c4d.Onull)
+        #if not BBGGroupContainer:
+            #BBGGroupContainer = c4d.BaseObject(c4d.Onull)
 
-            BBGGroupContainer.SetName(BBGName)
-            BBGGroupContainer[c4d.NULLOBJECT_DISPLAY] = 3
-            BBGGroupContainer[c4d.NULLOBJECT_RADIUS] = 100
-            BBGGroupContainer[c4d.NULLOBJECT_ORIENTATION] = 1
-            BBGGroupContainer.InsertUnder(parent)
+            #BBGGroupContainer.SetName(BBGName)
+            #BBGGroupContainer[c4d.NULLOBJECT_DISPLAY] = 3
+            #BBGGroupContainer[c4d.NULLOBJECT_RADIUS] = 100
+            #BBGGroupContainer[c4d.NULLOBJECT_ORIENTATION] = 1
+            #BBGGroupContainer.InsertUnder(parent)
 
-        CContainer.InsertUnder(BBGGroupContainer)
+        CContainer.InsertUnder(parent)
+        FinalContainer = CContainer
 
         for subNode in node:
             SubNomeName = subNode.get('name')
@@ -650,7 +670,7 @@ def CreateElementContainer(node, keys, name, parent):
 
             CContainer.SetName(name)
             #print(">>>>>>>>>>>>>>>>>>>>>>>>", name)
-            CreateElementContainer(subNode, subNode.attrib.keys(), subNode.tag, CContainer)
+            CreateElementContainer(subNode, subNode.tag, CContainer)
 
         AutoSetUserData = True
         FinalContainer = CContainer
@@ -693,7 +713,7 @@ def CreateElementContainer(node, keys, name, parent):
                 SubNomeName = "." + SubNomeName
 
             CContainer.SetName(name)
-            CreateElementContainer(subNode, subNode.attrib.keys(), subNode.tag + SubNomeName, CContainer)
+            CreateElementContainer(subNode, subNode.tag + SubNomeName, CContainer)
 
         AutoSetUserData = True
         FinalContainer = CContainer
@@ -704,7 +724,7 @@ def CreateElementContainer(node, keys, name, parent):
             for attiName in paramsNode.attrib.keys():
                 node.set(attiName, paramsNode.get(attiName))
 
-        if node.tag == "Spawner" or node.tag == "MessageCollider" or node.tag == "ReagentCollider" or "Barrier" in node.tag or "BreakableObject" in node.tag or "Reward" in node.tag or "Pyra" in node.tag:
+        if node.tag in ["Spawner", "MessageCollider", "ReagentCollider", "Barrier", "EnchantedBarrier", "BlockedBarrier", "SocketBarrier", "TriggeredBarrier", "Pool", "BreakableObject", "Reward", "Pyra"]:
             useBound = True;
         else:
             useBound = False;
@@ -790,9 +810,9 @@ if __name__ == '__main__':
                 for attiName in viewNode.attrib.keys():
                     node.set(attiName, viewNode.get(attiName))
                 for containerNode in viewNode:
-                    CreateElementContainer(containerNode, containerNode.attrib.keys(), containerNode.get('name'), CContainer)
+                    CreateElementContainer(containerNode, containerNode.get('name'), CContainer)
 
-        elif (node.tag == "LevelCollision") or node.tag == "Spikes":
+        elif node.tag in ["LevelCollision", "DamageCollision"]:
             CContainer = c4d.BaseObject(c4d.Onull)
             #GObjectName = node.get('name')
             CContainer[c4d.NULLOBJECT_DISPLAY] = 3
@@ -804,16 +824,18 @@ if __name__ == '__main__':
             #if node.tag != "Spikes":
             CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = - parent[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]
             CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = - parent[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]
-
+            
+            print("Processing", node.tag)
+            
             for rawNode in node.iter("RawCollision"):
-                CreateElementContainer(rawNode, rawNode.attrib.keys(), "RawCollision", CContainer)
+                CreateElementContainer(rawNode, "RawCollision", CContainer)
 
-            for boxNode in node.iter("BoxCollisions"):
-                CreateElementContainer(boxNode, boxNode.attrib.keys(), "BoxCollisions", CContainer)
+            for boxNode in node.iter("BoxCollision"):
+                CreateElementContainer(boxNode, "BoxCollision", CContainer)
 
-            if node.tag == "Spikes":
-                for rawNode in node.iter("ProcessedCollision"):
-                    CreateElementContainer(rawNode, rawNode.attrib.keys(), "ProcessedCollision", CContainer)
+            #if node.tag == "Spikes":
+                #for rawNode in node.iter("ProcessedCollision"):
+                    #CreateElementContainer(rawNode, "RawCollisions", CContainer)
 
         #General objects
         else:
@@ -833,7 +855,10 @@ if __name__ == '__main__':
                 #GameObjectReference[c4d.NULLOBJECT_RADIUS] = 100
                 GameObjectReference[c4d.NULLOBJECT_ORIENTATION] = 1
                 print(GameObjectReference, node)
-                CreateBounds(GameObjectReference, node)
+
+                if not useBound:
+                    CreateBounds(GameObjectReference, node)
+
                 GameObjectReference.InsertUnder(GameObjectsRefContainer)
                 setUserDataFromNode(GameObjectReference, node, True)
 
@@ -842,7 +867,7 @@ if __name__ == '__main__':
             CContainer[c4d.ID_BASEOBJECT_USECOLOR] = 2
             #print(GameObjectReference)
             CContainer[c4d.INSTANCEOBJECT_LINK] = GameObjectReference
-
+        print(node.get(type))
         CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] + float(node.get("x"))
         CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = CContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] - float(node.get("y"))
 
@@ -922,13 +947,13 @@ if __name__ == '__main__':
         CContainer[c4d.ID_BASEOBJECT_REL_SCALE] = c4d.Vector(1, 1, 1) * getScaleByGroup(node.get("group"))
 
         for ImageNode in node.iter("Image"):
-            CreateElementContainer(ImageNode, ImageNode.attrib.keys(), ImageNode.get('texture'), CContainer)
+            CreateElementContainer(ImageNode, ImageNode.get('texture'), CContainer)
 
         for EffectArtNode in node.iter("EffectArt"):
-            CreateElementContainer(EffectArtNode, EffectArtNode.attrib.keys(), EffectArtNode.get('texture'), CContainer)
+            CreateElementContainer(EffectArtNode, EffectArtNode.get('texture'), CContainer)
 
         for LightNode in node.iter("LightSprite"):
-            CreateElementContainer(LightNode, LightNode.attrib.keys(), LightNode.get('texture'), CContainer)
+            CreateElementContainer(LightNode, LightNode.get('texture'), CContainer)
 
         AutoSetUserData = True
         FinalContainer = CContainer
@@ -1020,7 +1045,7 @@ if __name__ == '__main__':
         AutoSetUserData = True
         FinalContainer = CContainer
 
-    elif node.tag == "RawCollision" or node.tag == "BoxCollisions" or node.tag == "ProcessedCollision":
+    elif node.tag in ["RawCollision", "BoxCollision", "ProcessedCollision"]:
         CContainer = c4d.BaseObject(c4d.Onull)
         name = node.tag
         CContainer.SetName(node.tag)
@@ -1029,25 +1054,25 @@ if __name__ == '__main__':
         CContainer[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
         CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
 
+        print("process collision")
+
         AutoSetUserData = True
         FinalContainer = CContainer
 
         for shapeNode in node.iter("RawShape"):
-            CreateElementContainer(shapeNode, shapeNode.attrib.keys(), shapeNode.get('type'), CContainer)
+            CreateElementContainer(shapeNode, shapeNode.get('type'), CContainer)
 
         for shapeNode in node.iter("BoxShape"):
-            CreateElementContainer(shapeNode, shapeNode.attrib.keys(), shapeNode.get('type'), CContainer)
+            CreateElementContainer(shapeNode, shapeNode.get('type'), CContainer)
 
         for shapeNode in node.iter("ProcessedShape"):
-            typeName = shapeNode.get('type')
-            if not typeName:
-                typeName = shapeNode.get('spikeType')
-            CreateElementContainer(shapeNode, shapeNode.attrib.keys(), typeName, CContainer)
+            CreateElementContainer(shapeNode, shapeNode.get('type'), CContainer)
 
-    elif node.tag == "RawShape" or node.tag == "ProcessedShape":
-        CBounds = c4d.BaseObject(c4d.Ospline)
-        CBounds.__init__(node.get("pointCount"), c4d.SPLINETYPE_LINEAR)
-        name = node.tag
+    elif node.tag in ["RawShape", "ProcessedShape"]:
+        CShape = c4d.BaseObject(c4d.Ospline)
+        CShape.__init__(node.get("pointCount"), c4d.SPLINETYPE_LINEAR)
+        name = "RawShape"
+        ParentName = parent.GetName().split(".")[0]
         rawPointList = node.get("points").split(",")
         idx = 0
         pointList = []
@@ -1055,47 +1080,47 @@ if __name__ == '__main__':
             pointList.append(c4d.Vector(float(rawPointList[idx]), -float(rawPointList[idx + 1]), 0))
             idx = idx + 2
 
-        CBounds.ResizeObject(len(pointList))
+        CShape.ResizeObject(len(pointList))
 
-        CBounds.SetAllPoints(pointList)
-        CBounds.SetName("RawShape." + name)
-        CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
-        CBounds[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
-        CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
-        CBounds[c4d.ID_LAYER_LINK] = CurrentAreaLayer
-        CBounds[c4d.SPLINEOBJECT_CLOSED] = True
-        CBounds.Message (c4d.MSG_UPDATE)
+        CShape.SetAllPoints(pointList)
+        CShape.SetName("RawShape." + name)
+        CShape[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        CShape[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
+        CShape[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.get("className"))
+        CShape[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+        CShape[c4d.SPLINEOBJECT_CLOSED] = True
+        CShape.Message (c4d.MSG_UPDATE)
 
         if node.tag != "ProcessedShape":
-            CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
-            CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
+            CShape[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
+            CShape[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
 
         AutoSetUserData = True
-        FinalContainer = CBounds
+        FinalContainer = CShape
 
     elif node.tag == "BoxShape":
-        CBounds = c4d.BaseObject(c4d.Osplinerectangle)
+        CShape = c4d.BaseObject(c4d.Osplinerectangle)
         name = "BoxShape"
-        CBounds.SetName("BoxShape." + name)
-        CBounds[c4d.ID_BASEOBJECT_USECOLOR] = 2
-        CBounds[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
-        CBounds[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.tag)
-        CBounds[c4d.ID_LAYER_LINK] = CurrentAreaLayer
+        CShape.SetName("BoxShape." + name)
+        CShape[c4d.ID_BASEOBJECT_USECOLOR] = 2
+        CShape[c4d.ID_BASELIST_ICON_COLORIZE_MODE] = 1
+        CShape[c4d.ID_BASEOBJECT_COLOR] = GetElementColor(node.get("className"))
+        CShape[c4d.ID_LAYER_LINK] = CurrentAreaLayer
 
         cMatrix = Convert2DMatrixTo3DMatrix(node)
-        CBounds.SetMg(cMatrix)
+        CShape.SetMg(cMatrix)
 
-        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
-        CBounds[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
+        CShape[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.get("x"))
+        CShape[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.get("y"))
 
         #print(float(node.get("rotation")))
-        #CBounds[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.degrees(float(node.get("rotation")))
+        #CShape[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.degrees(float(node.get("rotation")))
 
-        CBounds[c4d.PRIM_RECTANGLE_WIDTH] = float(node.get("width"))
-        CBounds[c4d.PRIM_RECTANGLE_HEIGHT] = float(node.get("height"))
+        CShape[c4d.PRIM_RECTANGLE_WIDTH] = float(node.get("width"))
+        CShape[c4d.PRIM_RECTANGLE_HEIGHT] = float(node.get("height"))
 
         AutoSetUserData = True
-        FinalContainer = CBounds
+        FinalContainer = CShape
 
     else:
         AutoSetUserData = True
@@ -1192,15 +1217,6 @@ def createOtherGameObjects(CurrentAreaLayer):
     CContainer[c4d.NULLOBJECT_ORIENTATION] = 1
     CContainer[c4d.ID_LAYER_LINK] = CurrentAreaLayer
     return CContainer
-
-def insertContainerToDocument(FinalContainer, parent, name):
-    if parent != None:
-        if parent.GetName().split(".")[0] != "LevelArea" and parent.GetName().split(".")[0] != "LevelBackground":
-            FinalContainer.SetName(name)
-        #Inser the Container to the doccument
-        if not FinalContainer.GetUp():
-            FinalContainer.InsertUnder(parent)
-            doc.AddUndo(c4d.UNDOTYPE_NEW, FinalContainer)
 
 def SetPolygon(SampleNode, CObject, UVWTag, Polygon):
     AtlasName = SampleNode.get("atlas")
@@ -1335,6 +1351,20 @@ def Convert3DMatrixTo2DMatrix(o3dMatrix, node):
     float(node.attrib.set(o3dMatrix.off.y))
     float(node.attrib.set(-o3dMatrix.off.x))
 
+def insertContainerToDocument(FinalContainer, parent, name):
+    if parent != None:
+        if parent.GetName().split(".")[0] != "LevelArea":
+            #print("name: ", name)
+            FinalContainer.SetName(name)
+        #Inser the Container to the doccument
+        if not FinalContainer.GetUp():
+            FinalContainer.InsertUnder(parent)
+            #print("Insert: ", FinalContainer.GetName(), " Under: ", parent)
+        #else:
+            #doc.InsertObject(FinalContainer)
+
+        doc.AddUndo(c4d.UNDOTYPE_NEW, FinalContainer)
+
 def main():
     #Ask the XML to import
     XMLpath = storage.LoadDialog()
@@ -1375,30 +1405,38 @@ def main():
     #Start Undo. This allow C4D to start to store actions in order to allow undo
     doc.StartUndo()
 
-    for node in tree.iter("LevelRegion"):
+    for node in tree.iter("LevelSite"):
         global RegionName
-        RegionName = node.get('name')
-        print("dsfdfsd", RegionName)
+        RegionName = node.get('regionName').replace("_", " ")
+        SiteName = node.get("name")
 
         objectTypesCounts = {}
 
-        LevelRegionContainer = CreateElementContainer(node, node.attrib.keys(), RegionName, None)
-        LevelRegionContainer.SetName(RegionName)
+        LevelRegionContainer = doc.SearchObject(RegionName)
+
+        if not LevelRegionContainer:
+            LevelRegionContainer = CreateElementContainer(None, "LevelRegion", None)
+            LevelRegionContainer.SetName(RegionName)
+
+            doc.InsertObject(LevelRegionContainer)
+            doc.AddUndo(c4d.UNDOTYPE_NEW, LevelRegionContainer)
+            #insertContainerToDocument(FinalContainer, parent, name)
+
+        LevelSiteContainer = CreateElementContainer(node, "LevelSite." + SiteName, LevelRegionContainer)
 
         #Inser the Container to the doccument
-        doc.InsertObject(LevelRegionContainer)
-        doc.AddUndo(c4d.UNDOTYPE_NEW, LevelRegionContainer)
+
 
         print(LevelRegionContainer)
 
-        for subNode in node:
-            SubNomeName = subNode.get('name')
-            if not SubNomeName:
-                SubNomeName = ""
-            else:
-                SubNomeName = "." + SubNomeName
+        #for subNode in node:
+            #SubNomeName = subNode.get('name')
+            #if not SubNomeName:
+                #SubNomeName = ""
+            #else:
+                #SubNomeName = "." + SubNomeName
 
-            CreateElementContainer(subNode, subNode.attrib.keys(), subNode.tag + SubNomeName, LevelRegionContainer)
+            #CreateElementContainer(subNode, subNode.tag + SubNomeName, LevelSiteContainer)
 
         #for child in root:
         #print(child.tag, child.attrib)
