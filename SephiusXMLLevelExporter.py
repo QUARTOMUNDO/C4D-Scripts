@@ -1,7 +1,14 @@
 import c4d
 import xml.etree.ElementTree as ET
 import math
-from c4d import DescID
+from c4d import DescID, Vector, Matrix, utils
+
+#Return true if object has a user data name and value is equal to desired
+def HasUserData(CObject, UDName):
+    for id, bc in CObject.GetUserDataContainer():
+        if bc[c4d.DESC_NAME] == UDName:
+            return True
+    return False
 
 def get_parameter_type(obj, parameter_id):
     parameter_data = obj.GetParameter(parameter_id, c4d.DESCFLAGS_GET_0)
@@ -398,9 +405,13 @@ def getChildByName(obj, name):
     return None
 
 def PreDefineLevelArea(obj, obj_node):
+    global AreaRoot
+    AreaRoot = obj
+    print("AreaRoot", AreaRoot.GetName())
+
     ObjectName = obj.GetName().split('.')[0]
 
-    obj_node.set('regionName', GetUserData(obj, "region").replace(" ", "_"))
+    obj_node.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
     obj_node.set('globalId',  ToIntStr(GetUserData(obj, "globalId")))
     obj_node.set('localId',  ToIntStr(GetUserData(obj, "localId")))
     obj_node.set('x',  str(obj.GetAbsPos().x))
@@ -430,6 +441,10 @@ def PreDefineLevelArea(obj, obj_node):
     print("==============")
 
 def PreDefineLevelBackground(obj, obj_node):
+    global AreaRoot
+    AreaRoot = obj
+    print("BGRoot", AreaRoot.GetName())
+
     ObjectName = obj.GetName().split('.')[0]
 
     obj_node.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
@@ -458,13 +473,16 @@ def PreLevelCollision(obj, obj_node):
     obj_node.set('x',  str(obj.GetAbsPos().x))
     obj_node.set('y',  str(-obj.GetAbsPos().y))
 
-    obj_node.set('physichScale', ToIntStr(GetUserData(obj, "physichScale")))
+    #obj_node.set('physichScale', ToIntStr(GetUserData(obj, "physichScale")))
 
     print("==============")
     print("LEVEL COLLISION PROCESSED")
     print("==============")
 
 def PreDefineContainer(obj, obj_node):
+    global CurrentContainer
+    CurrentContainer = obj
+
     ObjectName = obj.GetName().split('.')[1]
 
     obj_node.set('name', ObjectName)
@@ -505,10 +523,19 @@ def PreDefineGameSprite(obj, obj_node):
 def PreDefineRawCollision(obj, obj_node):
     ObjectName = obj.GetName().split('.')[0]
 
-    obj_node.set('type', "RawPolygon")
-    obj_node.set('oneWay',  str(GetUserData(obj, "oneWay")))
-    obj_node.set('group',  ToIntStr(GetUserData(obj, "group")))
-    obj_node.set('parallax',  str(GetUserData(obj, "parallax")))
+    #print(obj_node)
+
+    obj_node.set('type', GetUserData(obj, "type"))
+    obj_node.set('className', GetUserData(obj, "className"))
+
+    #HasOneWayData = HasUserData(CObject, UDName)
+    ShapeType =  obj_node.get('type')
+
+    if ShapeType in ["BoxPolygon", "RawPolygon", "RawPolygon"]:
+        obj_node.set('oneWay',  str(GetUserData(obj, "oneWay")))
+        obj_node.set('group',  ToIntStr(GetUserData(obj, "group")))
+        obj_node.set('parallax',  str(GetUserData(obj, "parallax")))
+
     obj_node.set('x',  str(obj.GetAbsPos().x))
     obj_node.set('y',  str(-obj.GetAbsPos().y))
     obj_node.set('points',  GetSplinePointsPositions(obj))
@@ -520,13 +547,15 @@ def PreDefineRawCollision(obj, obj_node):
 def PreDefineBoxCollision(obj, obj_node):
     ObjectName = obj.GetName().split('.')[0]
 
-    obj_node.set('type', "BoxPolygon")
+    print(obj_node)
+
+    obj_node.set('type', GetUserData(obj, "type"))
+    obj_node.set('className', GetUserData(obj, "className"))
     obj_node.set('oneWay',  str(GetUserData(obj, "oneWay")))
     obj_node.set('group',  ToIntStr(GetUserData(obj, "group")))
     obj_node.set('parallax',  str(GetUserData(obj, "parallax")))
 
     Convert3DMatrixTo2DMatrix(obj, obj_node)
-    #print(obj_node, obj_node.get("matrixA"))
 
     obj_node.set('height',  str(GetUserData(obj, "height")))
     obj_node.set('width',  str(GetUserData(obj, "width")))
@@ -577,7 +606,7 @@ def PreDefineImage(obj, obj_node):
 
     obj_node.set('transformMode', "normal")
 
-    SetElementTransform(obj, obj_node)
+    SetElementTransformWorldSpace(obj, obj_node)
 
     # Get the vertex map tag by name
     vtag = obj.GetTag(c4d.Tvertexcolor)
@@ -627,7 +656,7 @@ def PreDefineGameObject(obj, obj_node):
 
     obj_node.set('className', className)
 
-    SetElementTransform(obj, obj_node)
+    SetElementTransformLocalSpace(obj, obj_node)
 
     obj_node.set("scaleOffsetX", str(1))
     obj_node.set("scaleOffsetY", str(1))
@@ -656,7 +685,16 @@ def PreDefineGameObject(obj, obj_node):
     print("==============")
     print("GAME OBJECT PROCESSED")
     print("==============")
-
+    
+def PreDefineCompound(obj, obj_node):
+    #CompoundCache = obj.GetCache()
+    
+    #if CompoundCache:
+        #print("Compound object: {instance.GetName()}")
+        #print("Cache: {instance_cache.GetName()}")
+    #else:
+        #print("Compound cache not found")
+    
 def defineObjectBounds(obj):
     # Get the bounding box of the object
     BoundObject = getChildByName(obj, "Bounds")
@@ -674,17 +712,64 @@ def defineObjectBounds(obj):
         #print("object is Anything", BoundObject.GetType(), BoundObject.GetName())
         return ["box", BoundObject.GetRad() * 2]
 
-def SetElementTransform(obj, obj_node):
+def SetElementTransformLocalSpace(obj, obj_node):
     obj_node.set('x', str(obj.GetAbsPos().x))
     obj_node.set('y', str(-obj.GetAbsPos().y))
     obj_node.set('rotation', str(obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]))
     obj_node.set('scaleX', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]))
     obj_node.set('scaleY', str(obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]))
 
+def handle_negative_scale(rotation, scale, originalScale):
+    if originalScale.x < 0:
+        rotation += math.pi
+        scale.x *= -1
+
+    if originalScale.y < 0:
+        #rotation += math.pi
+        scale.y *= -1
+
+    return rotation, scale
+
+def SetElementTransformWorldSpace(obj, obj_node):
+    global AreaRoot
+    global CurrentContainer
+
+    # Get world space transform
+    global_matrix = obj.GetMg()
+    area_root_inv_matrix = ~AreaRoot.GetMg()
+    containerInvMatrix = ~CurrentContainer.GetMg()
+
+    # Remove area transformation (added by Sephius Engine in the loading process)
+    output_matrix = containerInvMatrix * global_matrix
+    #output_matrix = area_root_inv_matrix * output_matrix
+
+    #print("AreaRootTransform", area_root_inv_matrix.off)
+    #print("OriginalMatrix", global_matrix.off, global_matrix.v1.GetLength())
+    #print("OutputMatrix", output_matrix.off, output_matrix.v1.GetLength())
+
+    # Extract position, rotation, and scale from the matrix
+    position = output_matrix.off
+    scale = c4d.Vector(
+        output_matrix.v1.GetLength(),
+        output_matrix.v2.GetLength(),
+        output_matrix.v3.GetLength(),
+    )
+    rotation = c4d.utils.MatrixToHPB(output_matrix).z
+
+    # Handle negative scale
+    rotation, scale = handle_negative_scale(rotation, scale, obj[c4d.ID_BASEOBJECT_REL_SCALE])
+
+    # Set object node attributes
+    obj_node.set('x', str(position.x))
+    obj_node.set('y', str(-position.y))
+    obj_node.set('rotation', str(rotation))
+    obj_node.set('scaleX', str(scale.x))
+    obj_node.set('scaleY', str(scale.y))
+
 def PreDefineBase(obj, obj_node):
     ObjectName = obj.GetName()
     print(obj.GetName(), type(obj))
-    
+
     obj_node.set('x', str(obj.GetMg().off.x))
     obj_node.set('y',  str(-obj.GetMg().off.y))
 
@@ -698,17 +783,13 @@ def ShouldGenerateNode(obj):
         return True
     elif(ObjectID == "GameSprite"):
         return True
-    elif(ObjectID == "LevelCollision"):
+    elif ObjectID in ["LevelCollision", "DamageCollision"]:
         return True
-    elif(ObjectID == "RawCollision"):
+    elif ObjectID in ["RawCollision", "BoxCollision"]:
         return True
-    elif(ObjectID == "BoxCollisions"):
-        return True
-    elif(ObjectID == "BoxShape"):
+    elif ObjectID in ["BoxShape", "RawShape"]:
          return True
-    elif(ObjectID == "RawShape"):
-        return True
-    elif(ObjectID == "Container"):
+    elif ObjectID in ["AnimationContainer", "SpriteContainer", "QuadBatchContainer"]:
         return True
     elif(ObjectID == "Base"):
         return True
@@ -726,7 +807,7 @@ def PreDefineObjectType(obj, obj_node):
 
     if(ObjectID == "LevelArea"):
         PreDefineLevelArea(obj, obj_node)
-    if(ObjectID == "LevelCollision"):
+    elif ObjectID in ["LevelCollision", "DamageCollision"]:
         PreLevelCollision(obj, obj_node)
     elif(ObjectID == "BoxShape"):
         PreDefineBoxCollision(obj, obj_node)
@@ -734,12 +815,16 @@ def PreDefineObjectType(obj, obj_node):
         PreDefineRawCollision(obj, obj_node)
     elif(ObjectID == "GameSprite"):
         PreDefineGameSprite(obj, obj_node)
-    elif(ObjectID == "Container"):
+    elif ObjectID in ["AnimationContainer", "SpriteContainer", "QuadBatchContainer"]:
         PreDefineContainer(obj, obj_node)
     elif(ObjectID == "LevelBackground"):
         PreDefineLevelBackground(obj, obj_node)
     elif(ObjectID == "Base"):
         PreDefineBase(obj, obj_node)
+        
+    #Special Type of Objects composed by Clonners and other special techniques    
+    #elif(ObjectID == "Compound"):
+        #PreDefineCompound(obj, obj_node)
 
     #Images inside containers
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
@@ -804,18 +889,9 @@ def main():
 
         # Create a new XML tree and root node
         root = ET.Element('LevelSite')
-        root.set('regionName', GetUserData(obj, "region").replace(" ", "_"))
+        root.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
         root.set('siteName', obj.GetName().split('.')[1])
-        root.set('siteID', str(int(GetUserData(obj,  "id"))))
-    else:
-        Name = 'Backgrounds'
-
-        XMLFileName = RegionName + '_Backgrounds.xml'
-        print ('XML File Name' + XMLFileName)
-
-        # Create a new XML tree and root node
-        root = ET.Element('Backgrounds')
-        root.set('regionName', RegionName)
+        root.set('siteID', str(int(GetUserData(obj,  "siteID"))))
 
     # Parse through all children of the active object
     parse_objects(obj, root, False, 2)
