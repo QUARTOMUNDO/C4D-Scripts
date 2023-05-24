@@ -2,6 +2,44 @@ import c4d
 import xml.etree.ElementTree as ET
 import math
 from c4d import DescID, Vector, Matrix, utils
+from datetime import datetime
+
+def search_for_object(name, obj):
+    """
+    Search for a child object with a specific name.
+    :param name: the name of the object to search for.
+    :param obj: the current object in the hierarchy.
+    :return: the object if found, else None.
+    """
+    while obj:
+        if obj.GetName() == name:
+            return obj
+
+        result = search_for_object(name, obj.GetDown())
+        if result:
+            return result
+
+        obj = obj.GetNext()
+
+    return None
+
+def update_user_data(obj, param_name, value):
+    """
+    Update the value of a specific user data parameter.
+    :param obj: the object which has the user data.
+    :param param_name: the name of the user data parameter.
+    :param value: the new value to set.
+    :return: True if successful, False otherwise.
+    """
+    data = obj.GetUserDataContainer()
+    print('updating user data')
+    for id, bc in data:
+        if bc[c4d.DESC_NAME] == param_name:
+            print(bc[c4d.DESC_NAME], param_name, value)
+            obj[id] = value
+            return True
+
+    return False
 
 #Return true if object has a user data name and value is equal to desired
 def HasUserData(CObject, UDName):
@@ -133,7 +171,12 @@ def MaxAndMinCoord(coordinates):
     return [min_width, max_width, min_height, max_height]
 
 def SetPolygonVertexData(PolygonObject, node, SampleReference):
-    print(type(PolygonObject), type(PolygonObject) is c4d.PolygonObject)
+    Refpolygon_count = SampleReference.GetPolygonCount()
+    if Refpolygon_count > 1:
+        print("Polygon:", PolygonObject.GetName(), "Sample Reference has more than 1 polygon. This mean it is a wrong ref (not a ref sample) and it's not supported. Poly count:", Refpolygon_count)
+
+    #print(type(PolygonObject), type(PolygonObject) is c4d.PolygonObject)
+
     if PolygonObject is not None and type(PolygonObject) is c4d.PolygonObject:
         # Get the point count and list of points
         point_count = PolygonObject.GetPointCount()
@@ -141,6 +184,7 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
 
         # Get the polygon count and list of polygons
         polygon_count = PolygonObject.GetPolygonCount()
+
         polygons = PolygonObject.GetAllPolygons()
 
         # Get the UV tag and UV count
@@ -174,6 +218,8 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             # Get the U and V components of the vertex's UV coordinates for ref sample
             uvwRef = Refuv_tag.GetSlow(0)
             REFuvPoints = [uvwRef["b"], uvwRef["a"], uvwRef["c"], uvwRef["d"]]
+            print(REFuvPoints)
+            
             Range = MaxAndMinCoord(REFuvPoints)
 
             uMin = Range[0]
@@ -198,7 +244,8 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
                 #remap uv to be proportional to reference sample. In SephiusEngine, we acess the sub texture which has values from 0 to 1.
                 u = remap(u, uMin, uMax)
                 v = remap(v, vMin, vMax)
-
+                print(u, v)
+                
                 # Add the U and V components to the vertex UV coordinates string
                 vertex_uvs += "{},{},".format(u, v)
                 vertex_positions += "{},{},".format(x, y)
@@ -227,7 +274,6 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             VertexNode.set('PointCount', str(4))
             VertexNode.set('Positions', vertex_positions)
             VertexNode.set('Coords', vertex_uvs)
-
     else:
        raise ValueError("Provided object is not a polygon object ", PolygonObject)
 
@@ -577,8 +623,26 @@ def PreDefineImage(obj, obj_node):
     obj_node.set('name', ObjectName)
 
     #print (type(obj).__name__)
-
+    
     SampleReference = GetUserData(obj, "Sample Reference")
+    print(SampleReference)
+    
+    #fixing code. Fix objects with wrong/none sample reference
+    if SampleReference is None or SampleReference == obj:
+        print("Sample Reference is NONE")
+        MissingSampleName = obj.GetName()
+        MissingSampleName = MissingSampleName.split("_")
+        MissingSampleName = MissingSampleName[0] + "_" + MissingSampleName[1] + "_Sample"
+        print("Sample Reference Missing Name", MissingSampleName)
+        
+        MissingSampleRoot = doc.SearchObject('ImageSamples')
+        SampleReference  = search_for_object(MissingSampleName, MissingSampleRoot)
+        update_user_data(obj, "Sample Reference", SampleReference)
+        if (type(obj).__name__ == "InstanceObject"):
+            obj[c4d.INSTANCEOBJECT_LINK] = SampleReference
+
+        print("Sample Reference: ", SampleReference, GetUserData(obj, "Sample Reference"))
+
     isSample = GetUserData(SampleReference, "IsSpriteSheetSample")
     Texture = GetUserData(SampleReference, "texture")
     Atlas = GetUserData(SampleReference, "Atlas")
@@ -685,16 +749,67 @@ def PreDefineGameObject(obj, obj_node):
     print("==============")
     print("GAME OBJECT PROCESSED")
     print("==============")
-    
-def PreDefineCompound(obj, obj_node):
-    #CompoundCache = obj.GetCache()
-    
-    #if CompoundCache:
-        #print("Compound object: {instance.GetName()}")
-        #print("Cache: {instance_cache.GetName()}")
-    #else:
-        #print("Compound cache not found")
-    
+
+def PreDefineCompound(obj, obj_node, indent):
+    HasModifiers = has_modifier_child(obj)
+
+    print(obj.GetName(), "Has Modifiers?", HasModifiers)
+
+    #store the parent and the position relative to the parent
+    ObjGetMg = obj.GetMg()
+    ObjeParent = obj.GetUp()
+
+    if HasModifiers == False:
+        CompoundCache = obj.GetCache()
+    else:
+        # Use SendModelingCommand to create a new object from the current state
+        new_object = utils.SendModelingCommand(command=c4d.MCOMMAND_CURRENTSTATETOOBJECT,
+                                               list=[obj],
+                                               mode=c4d.MODELINGCOMMANDMODE_ALL,
+                                               doc=doc)
+        if new_object:
+            #doc.InsertObject(new_object[0])
+            CompoundCache = new_object[0]
+
+            #restore the position in relation to the parent
+            CompoundCache.SetMg(ObjGetMg)
+
+            print(f"Newly created object: {CompoundCache.GetName()}")
+            VerifyChildsTypes(CompoundCache)
+
+    if CompoundCache:
+        print(f"Compound object: {obj.GetName()}")
+        print(f"Cache: {CompoundCache.GetName()}")
+        parse_objects(CompoundCache, obj_node, ShouldGenerateNode(CompoundCache), indent, True)
+    else:
+        print("Compound cache not found")
+
+def has_modifier_child(obj):
+    child = obj.GetDown()
+    while child:
+        #print(" Modifier?", child.GetName(), child.GetType(), c4d.Oinstance)
+        if child.GetType() in get_known_modifiers():
+            return True
+        if child.GetDown():  # Check if the current child has any children
+            if has_modifier_child(child):  # Recursively check if the child's children have any modifiers
+                return True
+        child = child.GetNext()
+    return False
+
+def VerifyChildsTypes(obj):
+    children = obj.GetChildren()
+    print(" Compound Child Type?", obj.GetName(), obj.GetType(), c4d.Opolygon, type(obj).__name__)
+
+    # Recursively parse through all children of the current object
+    for child in children:
+        VerifyChildsTypes(child)
+
+def get_known_modifiers():
+    return [
+    c4d.Obend, c4d.Otwist, c4d.Otaper, c4d.Oshear, c4d.Obulge, c4d.Oformula, c4d.Ospherify, c4d.Osplinedeformer, c4d.Ocamorph, c4d.Oshrinkwrap, c4d.Ocasurface,
+    c4d.Oexplosion, c4d.Omelt, c4d.Oshatter, c4d.Owind, c4d.Oattractor, c4d.Ocasmooth, c4d.Owrap, c4d.Ocacorrection, c4d.Omgsplinewrap
+    ]
+
 def defineObjectBounds(obj):
     # Get the bounding box of the object
     BoundObject = getChildByName(obj, "Bounds")
@@ -776,6 +891,12 @@ def PreDefineBase(obj, obj_node):
 #Define if object should generate XML node with information othetwise it will be ignored (beside it's childen will be processes)
 def ShouldGenerateNode(obj):
     ObjectID = obj.GetName().split('.')[0]
+    Parent = obj.GetUp()
+
+    if Parent:
+        ParentID = Parent.GetName().split('.')[0]
+    else:
+        ParentID = "None"
 
     if(ObjectID == "LevelArea"):
         return True
@@ -795,10 +916,23 @@ def ShouldGenerateNode(obj):
         return True
     elif(ObjectID == "Bases"):
         return True
+
+
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
-        return True
+        #print('IsSpriteSheetSample GetType ', obj.GetName(), obj.GetType(), c4d.Oinstance, c4d.Opolygon )
+        if(obj.GetType() in [c4d.Oinstance, c4d.Opolygon]):
+            if ParentID == "Compound":#Objects that are child of a Compound object should not be processed since we will use the cached result
+                return False
+            else:
+                return True
+        else:
+            return False
+
+
     elif((GetUserData(obj, "IsGameObject", False)) == True):
         return True
+
+
     else:
         return False
 
@@ -821,10 +955,10 @@ def PreDefineObjectType(obj, obj_node):
         PreDefineLevelBackground(obj, obj_node)
     elif(ObjectID == "Base"):
         PreDefineBase(obj, obj_node)
-        
-    #Special Type of Objects composed by Clonners and other special techniques    
-    #elif(ObjectID == "Compound"):
-        #PreDefineCompound(obj, obj_node)
+
+    #Special Type of Objects composed by Clonners and other special techniques
+    elif(ObjectID == "Compound"):
+        PreDefineCompound(obj, obj_node)
 
     #Images inside containers
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
@@ -833,7 +967,7 @@ def PreDefineObjectType(obj, obj_node):
         PreDefineGameObject(obj, obj_node)
 
 
-def parse_objects(obj, parent_node, GenerateNode, indent=0):
+def parse_objects(obj, parent_node, GenerateNode, indent=0, Cached=False):
 
     #This function recursively parses through all children of the given object
     #and creates an XML describing their position, rotation, scale, and any user data.
@@ -851,6 +985,12 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0):
 
         #Process the object
         PreDefineObjectType(obj, PassNode)
+
+    elif ObjectID == "Compound" and Cached == False:# Process compound objects
+        print("Compound Object Detected")
+        PassNode = parent_node;
+        PreDefineCompound(obj, PassNode, indent)
+
     else:
         PassNode = parent_node;
 
@@ -859,11 +999,12 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0):
     else:
         NextIdent = indent
 
-    # Invert the order of the children list
-    children = obj.GetChildren()[::-1]
-    # Recursively parse through all children of the current object
-    for child in children:
-        parse_objects(child, PassNode, ShouldGenerateNode(child), NextIdent)
+    if ObjectID not in ["Compound"] or  Cached == True:
+        # Invert the order of the children list
+        children = obj.GetChildren()[::-1]
+        # Recursively parse through all children of the current object
+        for child in children:
+            parse_objects(child, PassNode, ShouldGenerateNode(child), NextIdent, Cached)
 
     if(GenerateNode):
         # Add line breaks and indentation to the closing XML string
@@ -877,6 +1018,9 @@ def main():
     #stop if root object is not a site
     if obj.GetName().split('.')[0] not in ("LevelSite", "LevelBackgrounds"):
         raise ValueError("OBJECT SELECTED IS NOT A VALID SITE OR BACKGROUNDS")
+
+    global LevelSite
+    LevelSite = obj
 
     Root = get_top_parent(obj)
     RegionName = Root.GetName().replace(" ", "")
@@ -892,7 +1036,12 @@ def main():
         root.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
         root.set('siteName', obj.GetName().split('.')[1])
         root.set('siteID', str(int(GetUserData(obj,  "siteID"))))
-
+        
+        now = datetime.now()
+        date_string = now.strftime("%Y-%m-%d %H:%M:%S")
+        VersionString = "C4D_" + date_string
+        root.set('Version', VersionString)
+        
     # Parse through all children of the active object
     parse_objects(obj, root, False, 2)
     print("Fnished Pa")
