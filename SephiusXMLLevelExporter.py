@@ -219,7 +219,7 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             uvwRef = Refuv_tag.GetSlow(0)
             REFuvPoints = [uvwRef["b"], uvwRef["a"], uvwRef["c"], uvwRef["d"]]
             print(REFuvPoints)
-            
+
             Range = MaxAndMinCoord(REFuvPoints)
 
             uMin = Range[0]
@@ -245,7 +245,7 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
                 u = remap(u, uMin, uMax)
                 v = remap(v, vMin, vMax)
                 print(u, v)
-                
+
                 # Add the U and V components to the vertex UV coordinates string
                 vertex_uvs += "{},{},".format(u, v)
                 vertex_positions += "{},{},".format(x, y)
@@ -623,10 +623,10 @@ def PreDefineImage(obj, obj_node):
     obj_node.set('name', ObjectName)
 
     #print (type(obj).__name__)
-    
+
     SampleReference = GetUserData(obj, "Sample Reference")
     print(SampleReference)
-    
+
     #fixing code. Fix objects with wrong/none sample reference
     if SampleReference is None or SampleReference == obj:
         print("Sample Reference is NONE")
@@ -634,7 +634,7 @@ def PreDefineImage(obj, obj_node):
         MissingSampleName = MissingSampleName.split("_")
         MissingSampleName = MissingSampleName[0] + "_" + MissingSampleName[1] + "_Sample"
         print("Sample Reference Missing Name", MissingSampleName)
-        
+
         MissingSampleRoot = doc.SearchObject('ImageSamples')
         SampleReference  = search_for_object(MissingSampleName, MissingSampleRoot)
         update_user_data(obj, "Sample Reference", SampleReference)
@@ -686,7 +686,11 @@ def PreDefineImage(obj, obj_node):
     AlphaFiels = ColorField.GetNext()
 
     obj_node.set('alpha', str(AlphaFiels.GetStrength()))
-    obj_node.set('color', str(ColorField[c4d.FIELDLAYER_COLORIZE_COLORTOP]))
+    
+    color = ColorField[c4d.FIELDLAYER_COLORIZE_COLORTOP]
+    color = rgb_to_uint(color)
+    obj_node.set('color', str(color))
+    
     obj_node.set('blendMode', (GetUserData(obj, "blendMode", False)))
     #obj_node.set('group', ToIntStr(GetUserData(obj, "group")))
 
@@ -700,6 +704,13 @@ def PreDefineImage(obj, obj_node):
     print("==============")
     print("IMAGE PROCESSED")
     print("==============")
+    
+def rgb_to_uint(color):
+    r = int(color.x * 255)
+    g = int(color.y * 255)
+    b = int(color.z * 255)
+
+    return (r << 16) | (g << 8) | b
 
 def BoundsString(x, y, w, h):
     BoundsStr = "(x=" + str(x) + ", " + "y=" + str(y) + ", " + "w=" + str(w) + ", " + "h=" + str(h) + ")"
@@ -1036,12 +1047,12 @@ def main():
         root.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
         root.set('siteName', obj.GetName().split('.')[1])
         root.set('siteID', str(int(GetUserData(obj,  "siteID"))))
-        
+
         now = datetime.now()
         date_string = now.strftime("%Y-%m-%d %H:%M:%S")
         VersionString = "C4D_" + date_string
         root.set('Version', VersionString)
-        
+
     # Parse through all children of the active object
     parse_objects(obj, root, False, 2)
     print("Fnished Pa")
