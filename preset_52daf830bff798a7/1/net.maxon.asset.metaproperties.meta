@@ -1,0 +1,20 @@
+﻿{
+	"identification": "net.maxon.asset.metadata",
+	"content": {
+		"dataType": "net.maxon.interface.datadictionary-C",
+		"content": {
+			"referenceDataType": "net.maxon.interface.datadictionary-C",
+			"_impl": {
+				"_mode": 1,
+				"_keyType": "net.maxon.datatype.internedid",
+				"_fastData": [
+					"net.maxon.asset.metaproperties.base.automaticpreview",
+					{
+						"dataType": "bool",
+						"content": true
+					}
+				]
+			}
+		}
+	}
+}
