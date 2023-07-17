@@ -710,13 +710,13 @@ def PreDefineImage(obj, obj_node):
         print("Sample Reference Missing Name", MissingSampleName)
 
         MissingSampleRoot = doc.SearchObject('SiteSamples')
-        
+
         if MissingSampleRoot is None:
             raise ValueError("MissingSampleRoot is NONE", MissingSampleName, "Samples root should have this name")
-        
+
         SampleReference  = search_for_object(MissingSampleName, MissingSampleRoot)
         update_user_data(obj, "Sample Reference", SampleReference)
-        
+
         if (type(obj).__name__ == "InstanceObject"):
             obj[c4d.INSTANCEOBJECT_LINK] = SampleReference
 
@@ -751,7 +751,8 @@ def PreDefineImage(obj, obj_node):
         obj_node.set('type', "Polygon")
 
     obj_node.set('className', className)
-
+    obj_node.set('Name', obj.GetName())
+    
     if className == 'EffectArt':
         obj_node.set('texture', Atlas)
     else:
@@ -954,13 +955,19 @@ def SetElementTransformLocalSpace(obj, obj_node):
     obj_node.set('scaleY', str(abs(scaleY)))
 
 def handle_negative_scale(rotation, scale, originalScale):
+    if (originalScale.x < 0 and originalScale.y < 0):
+        rotation += math.pi
+        scale.x *= -1
+        scale.y *= -1
+
     if originalScale.x < 0:
         rotation += math.pi
         scale.x *= -1
 
     if originalScale.y < 0:
-        #rotation += math.pi
-        scale.y *= -1
+        rotation += math.pi
+        scale.y *= 1
+        scale.x *= -1
 
     return rotation, scale
 
