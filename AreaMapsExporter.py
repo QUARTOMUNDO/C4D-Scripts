@@ -8,11 +8,11 @@ op: Optional[c4d.BaseObject]  # The active object, None if unselected
 
 def color_to_value(color):
     rounded_value = round(color.x * 100)
-    print(rounded_value)
+    #print(rounded_value)
     return str(int(rounded_value))
 
 def color_to_luma(color):
-    print(color.x)
+    #print(color.x)
     if(color.x > 0.5):
         return "1"
     else:
@@ -123,6 +123,44 @@ def main() -> None:
         LumaMapValueElement.attrib = {"values": ",".join(values)}
 
     ##### LUMA MAP  #####
+
+    ##### SITE MAPS  #####
+    SiteMapsRoot = ET.SubElement(root, "SiteMaps")
+    SiteMapsContainer = doc.SearchObject("SiteMapPieces")
+    
+    OblivionLandsBox = SiteMapsContainer.GetDown()
+    print(OblivionLandsBox.GetName())
+    
+    OblivionLandsBoxNode = ET.SubElement(SiteMapsRoot, "MapLocation")
+    OblivionLandsBoxNode.attrib = {
+        "TextureName": OblivionLandsBox.GetName(),
+        "scaleX": str(OblivionLandsBox[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]),
+        "scaleY": str(OblivionLandsBox[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
+        "positionX": str(OblivionLandsBox[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
+        "positionY": str(-OblivionLandsBox[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]),
+        "className": "MapLocation"
+    }
+
+    CurrentMapPiece = OblivionLandsBox.GetNext()
+    while CurrentMapPiece:
+        #process_children(child)
+        if CurrentMapPiece:
+            print(CurrentMapPiece.GetName())
+    
+            SiteMapLocationNode = ET.SubElement(SiteMapsRoot, "MapLocation")
+            SiteMapLocationNode.attrib = {
+                "siteName": CurrentMapPiece.GetName().split("_")[1],
+                "scaleX": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]),
+                "scaleY": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
+                "positionX": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
+                "positionY": str(-CurrentMapPiece[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]),
+                "className": "SiteMap"
+            }
+
+        CurrentMapPiece = CurrentMapPiece.GetNext() 
+        
+    ##### SITE MAPS  #####
+
 
     XMLFileName = "LandsOfOblivion_Maps.xml"
 

@@ -5,6 +5,7 @@ from c4d import gui
 from c4d import storage
 from c4d import utils
 from xml.etree import ElementTree
+import math 
 
 XMLpath = ""
 PNGpath = ""
@@ -32,9 +33,15 @@ def setPivotDiff(TextureNode):
         height = float(TextureNode.attrib.get("height"))
         frameX = float(TextureNode.attrib.get("frameX"))
         frameY = float(TextureNode.attrib.get("frameY"))
-        frameWitdh = float(TextureNode.attrib.get("frameWidth"))
-        frameHeight = float(TextureNode.attrib.get("frameHeight"))
-
+        rotated = TextureNode.attrib.get("rotated") == "true"
+        
+        if rotated:
+            frameWitdh = float(TextureNode.attrib.get("frameHeight"))
+            frameHeight = float(TextureNode.attrib.get("frameWidth"))
+        else:
+            frameWitdh = float(TextureNode.attrib.get("frameWidth"))
+            frameHeight = float(TextureNode.attrib.get("frameHeight"))
+            
         CDIFFX = ((width * 0.5) - ((frameWitdh * 0.5) + frameX)) * ScaleRatio
         CDIFFY = ((height * 0.5) - ((frameHeight * 0.5) + frameY)) * ScaleRatio
 
@@ -80,7 +87,27 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
     PSs.append(c4d.Vector(hX, pY, 0) + pivotDiff)
     PSs.append(c4d.Vector(hX, hY, 0) + pivotDiff)
     PSs.append(c4d.Vector(pX, hY, 0) + pivotDiff)
+    
+    rotated = TextureNode.attrib.get("rotated") == "true"
+    
+    if rotated:
+        # create the rotation matrix for 90 degrees counterclockwise
+        rotation_matrix = [[0, -1], [1, 0]]
 
+        # apply the rotation to each point
+        rotated_Pss = []
+        for point in PSs:
+            x = point.x
+            y = point.y
+            rotated_x = rotation_matrix[0][0]*x + rotation_matrix[0][1]*y
+            rotated_y = rotation_matrix[1][0]*x + rotation_matrix[1][1]*y
+            rotated_Pss.append(c4d.Vector(rotated_x, rotated_y, 0))
+
+        PSs = rotated_Pss
+    
+        #re-rotate the object
+        CObject[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.pi / 2
+        
     #print("UV Coord px: ", float(TextureNode.attrib.get("x")), float(TextureNode.attrib.get("y")), float(TextureNode.attrib.get("width")), float(TextureNode.attrib.get("height")))
     CoX = float(TextureNode.attrib.get("x")) * ScaleRatio / AtlasWidth
     CoY = float(TextureNode.attrib.get("y"))  * ScaleRatio/ AtlasHeight
@@ -118,6 +145,7 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
 
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
 
+    
 #Return true if object has a user data name and value is equal to desired
 def HasUserData(CObject, UDName):
     for id, bc in CObject.GetUserDataContainer():
@@ -323,7 +351,7 @@ def main():
     if not hasTextureAtlas:
         print(gui.MessageDialog("XML does not have TextureAtlas information"))
         return
-    
+
     #Start Undo. This allow C4D to start to store actions in order to allow undo
     doc.StartUndo()
     #Create a Sample Container to collect all our samples. It it alrearyExist Just use the actual one.
@@ -469,12 +497,13 @@ def main():
     #Create the Samples
     for node in tree.iter("SubTexture"):
         currenName = node.attrib.get("name")
+        rotated = node.attrib.get("rotated")
         
         print(currenName, len(currenName.split("_")))
-        
+
         if len(currenName.split("_")) > 2:
             return gui.MessageDialog("Sub textues (samples) name patern is wrong. Should be like 'Atlas_TexName', have just one '_' divisor. This sample " + currenName + " have more.")
-               
+
         CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
         CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
 
@@ -860,6 +889,12 @@ def main():
             CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
             CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
             CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
+            
+            rotated = node.attrib.get("rotated") == "true"            
+            if rotated:
+                #re-rotate the object
+                CInstance[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.pi / 2
+        
             CInstance.InsertUnder(InstancesContainer)
 
             #Refresh the managers to show the new object
