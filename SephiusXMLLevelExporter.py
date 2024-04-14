@@ -144,10 +144,10 @@ def get_userdata_values(obj, group_name):
 
         #parentGroupContainer = ud_container[parent_group_id]
         IDName = bc[c4d.DESC_NAME]
-        #print('ParentGroupID', parent_group_id, id, IDName, obj.GetName(),)
+       #print('ParentGroupID', parent_group_id, id, IDName, obj.GetName())
 
         try:
-            #print('ParentGroupIDName', obj[parent_group_id])
+           #print('ParentGroupIDName', obj[parent_group_id])
 
             if (parent_group_id and obj[parent_group_id] == group_name) or (GroupNameAlt == group_name):
                 # Get the variable name and value
@@ -167,7 +167,7 @@ def get_userdata_values(obj, group_name):
                         if str(variable_value).split(".")[1] == '0':
                             variable_value = str(variable_value).split(".")[0]
 
-                #print("variable_value", bc[c4d.DESC_UNIT], variable_name, variable_value )
+               #print("variable_value", bc[c4d.DESC_UNIT], variable_name, variable_value )
 
                 # Get the parameter data type
                 #data_entry = bc.GetCustomDataType(id)
@@ -176,7 +176,7 @@ def get_userdata_values(obj, group_name):
                 #print('5', group_name, variable_name, ud_type, variable_value, bool(variable_value))
                 user_data_dict[variable_name] =  str(variable_value)
         except:
-            #print('GroupNameAlt', IDName)
+           #print('GroupNameAlt', IDName)
             GroupNameAlt = IDName
 
     return user_data_dict
@@ -483,10 +483,12 @@ def Convert3DMatrixTo2DMatrix(obj, node):
 
 #Return value for a user data by name
 def GetUserData(obj, UDName, stopIfNone=True):
-    #print(obj)
+    #print("obj: ", obj, obj.GetName())
 
     for id, bc in obj.GetUserDataContainer():
-        #print(bc[c4d.DESC_NAME], UDName)
+        #print("bc[c4d.DESC_NAME: ", bc[c4d.DESC_NAME])
+        #obj[id]
+        #print("obj[id]: ", obj[id])
         obID = obj[id]
         if bc[c4d.DESC_NAME] == UDName:
             return obj[id]
@@ -514,24 +516,34 @@ def getChildByName(obj, name, halt=True):
         raise ValueError("Object Has no Child With The Name Provided", name)
     return None
 
+LocalID = -1
 def PreDefineLevelArea(obj, obj_node):
-    global AreaRoot
+    global AreaRoot  
+    global LocalID
+
+    print("LocalID: " + str(LocalID))
+    
     AreaRoot = obj
     print("AreaRoot", AreaRoot.GetName())
 
     ObjectName = obj.GetName().split('.')[0]
+    GlobalID = ToIntStr(obj.GetName().split('.')[1])
+    LocalID = LocalID + 1
 
     obj_node.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
-    obj_node.set('globalId',  ToIntStr(GetUserData(obj, "globalId")))
-    obj_node.set('localId',  ToIntStr(GetUserData(obj, "localId")))
+    obj_node.set('globalId',  GlobalID)
+    obj_node.set('localId',  str(LocalID))
     obj_node.set('x',  str(obj.GetAbsPos().x))
     obj_node.set('y',  str(-obj.GetAbsPos().y))
 
+    BoundName = "Bounds." + obj.GetName()
+    BoundName = BoundName.split('.')[0] + "." + BoundName.split('.')[1]
+
     # Get the bounding box of the object
-    BoundObject = getChildByName(obj, "Bounds." + obj.GetName())
+    BoundObject = getChildByName(obj, BoundName)
 
     if(BoundObject is None):
-        raise ValueError("No Bounds Found for ", obj.GetName())
+        raise ValueError("No Bounds Found for ", BoundName)
 
     Bounds = BoundObject.GetRad()
 
@@ -667,6 +679,7 @@ def PreDefineRawCollision(obj, obj_node):
 
     obj_node.set('x',  str(obj.GetAbsPos().x))
     obj_node.set('y',  str(-obj.GetAbsPos().y))
+    obj_node.set('rotation',  str(obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]))
     obj_node.set('points',  GetSplinePointsPositions(obj))
 
     print("==============")
@@ -732,7 +745,7 @@ def PreDefineImage(obj, obj_node):
 
     obj_node.tag = className
     ObjectName = className
-    print(obj.GetName(), type(obj))
+   #print(obj.GetName(), type(obj))
     #obj_node.set('name', ObjectName)
 
     #print (type(obj).__name__)
@@ -752,7 +765,7 @@ def PreDefineImage(obj, obj_node):
 
     obj_node.set('className', className)
     obj_node.set('Name', obj.GetName())
-    
+
     if className == 'EffectArt':
         obj_node.set('texture', Atlas)
     else:
@@ -760,6 +773,13 @@ def PreDefineImage(obj, obj_node):
 
     if className == 'LightSprite':
         obj_node.set('radius', str(GetUserData(obj, "radius", False)))
+
+        if GetUserData(obj, "castShadow", False) == 0:
+            castShadow = "false"
+        else:
+            castShadow = "true"
+
+        obj_node.set('castShadow', castShadow)
 
     obj_node.set('atlas', Atlas)
 
@@ -773,21 +793,28 @@ def PreDefineImage(obj, obj_node):
     #print('--------------------------------')
     #print('Tag ', vtag)
 
-    # Get the number of fields in the Vertex Color Tag
-    fields = vtag[c4d.ID_VERTEXCOLOR_FIELDS]
-    fieldsCount = fields.GetCount()
-    fieldsRoot = fields.GetLayersRoot()
-    ColorField = fieldsRoot.GetFirst()
-    AlphaFiels = ColorField.GetNext()
+    if (vtag):
+        # Get the number of fields in the Vertex Color Tag
+        fields = vtag[c4d.ID_VERTEXCOLOR_FIELDS]
+        fieldsCount = fields.GetCount()
+        fieldsRoot = fields.GetLayersRoot()
+        ColorField = fieldsRoot.GetFirst()
+        AlphaFiels = ColorField.GetNext()
 
-    obj_node.set('alpha', str(AlphaFiels.GetStrength()))
+        obj_node.set('alpha', str(AlphaFiels.GetStrength()))
 
-    color = ColorField[c4d.FIELDLAYER_COLORIZE_COLORTOP]
-    color = rgb_to_uint(color)
-    obj_node.set('color', str(color))
+        color = ColorField[c4d.FIELDLAYER_COLORIZE_COLORTOP]
+        color = rgb_to_uint(color)
+        obj_node.set('color', str(color))
+    else:
+        obj_node.set('alpha', str(1))
+        color = rgb_to_uint(c4d.Vector(255, 255, 255))
+        obj_node.set('color', str(color))
 
-    obj_node.set('blendMode', (GetUserData(obj, "blendMode", False)))
-    #obj_node.set('group', ToIntStr(GetUserData(obj, "group")))
+    blendMode = GetUserData(obj, "blendMode", False)
+    if(blendMode == "None"):
+        blendMode = "normal"
+    obj_node.set('blendMode', blendMode)
 
     obj_node.set('skewX', '0')#skew is not supported. we will use vertex offset
     obj_node.set('skewY', '0')#skew is not supported. we will use vertex offset
@@ -927,7 +954,7 @@ def defineObjectBounds(obj):
     BoundObject = getChildByName(obj, "Bounds", False)
 
     if BoundObject is None:
-        print("object is None")
+       #print("object is None")
         return [None, None]
     elif BoundObject.GetType() == c4d.Osplinecircle:
         #print("object is Circle", BoundObject.GetType())
@@ -1139,6 +1166,7 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0, Cached=False):
 
 def main():
     global Root
+    
     Root = doc.SearchObject('LANDS OF OBLIVION')
     RegionName = Root.GetName().replace(" ", "")
 

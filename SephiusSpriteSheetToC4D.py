@@ -26,28 +26,44 @@ ScaleRatio = 1
 
 #Define the pivot center of a sprite when it has transparent pixels cropped during pack process and that made center offset
 def setPivotDiff(TextureNode):
+    # Check if frame information is present
+    frameX = TextureNode.attrib.get("frameX")
+    frameY = TextureNode.attrib.get("frameY")
 
-    HasFrmeInfo = bool(TextureNode.attrib.get("frameX")) * ScaleRatio
-    if HasFrmeInfo:
-        width = float(TextureNode.attrib.get("width"))
-        height = float(TextureNode.attrib.get("height"))
-        frameX = float(TextureNode.attrib.get("frameX"))
-        frameY = float(TextureNode.attrib.get("frameY"))
+    if frameX is not None and frameY is not None:
+        frameX = float(frameX)
+        frameY = float(frameY)
+        frameWidth = float(TextureNode.attrib.get("frameWidth"))
+        frameHeight = float(TextureNode.attrib.get("frameHeight"))
+
+        # Check for rotation
         rotated = TextureNode.attrib.get("rotated") == "true"
-        
-        if rotated:
-            frameWitdh = float(TextureNode.attrib.get("frameHeight"))
-            frameHeight = float(TextureNode.attrib.get("frameWidth"))
-        else:
-            frameWitdh = float(TextureNode.attrib.get("frameWidth"))
-            frameHeight = float(TextureNode.attrib.get("frameHeight"))
-            
-        CDIFFX = ((width * 0.5) - ((frameWitdh * 0.5) + frameX)) * ScaleRatio
-        CDIFFY = ((height * 0.5) - ((frameHeight * 0.5) + frameY)) * ScaleRatio
 
-        #CDIFFX = -(float(TextureNode.attrib.get("frameX")) * ScaleRatio + (float(TextureNode.attrib.get("frameWidth")) * ScaleRatio) - float(TextureNode.attrib.get("width")) * ScaleRatio)
-        #CDIFFY = (float(TextureNode.attrib.get("frameY")) * ScaleRatio + (float(TextureNode.attrib.get("frameHeight")) * ScaleRatio) - float(TextureNode.attrib.get("height")) * ScaleRatio)
-        pivotDiff = c4d.Vector(CDIFFX, -CDIFFY, 0)
+        if rotated:
+            # Swap width and height if rotated
+            width = float(TextureNode.attrib.get("height"))
+            height = float(TextureNode.attrib.get("width"))
+        else:
+            width = float(TextureNode.attrib.get("width"))
+            height = float(TextureNode.attrib.get("height"))
+
+        # Calculate the center of the original rectangle (assuming it starts at 0,0)
+        originalCenterX = width / 2
+        originalCenterY = height / 2
+
+        # Calculate the center of the frame
+        frameCenterX = frameX + frameWidth / 2
+        frameCenterY = frameY + frameHeight / 2
+
+        if rotated:   
+            # Calculate the difference in centers, scaled
+            CDIFFY = (originalCenterX - frameCenterX) * ScaleRatio
+            CDIFFX = (originalCenterY - frameCenterY) * ScaleRatio
+            pivotDiff = c4d.Vector(-CDIFFX, -CDIFFY, 0)
+        else:
+            CDIFFX = (originalCenterX - frameCenterX) * ScaleRatio
+            CDIFFY = (originalCenterY - frameCenterY) * ScaleRatio
+            pivotDiff = c4d.Vector(-CDIFFX, -CDIFFY, 0)
     else:
         pivotDiff = c4d.Vector(0, 0, 0)
 
@@ -363,7 +379,7 @@ def main():
         Cbc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP) # Create Group
         Cbc[c4d.DESC_NAME] = "Atlas Information"
         Celement = SamplesContainer.AddUserData(Cbc)
-        SamplesContainer[Celement] = "Atlas Information"
+        #SamplesContainer[Celement] = "Atlas Information"
 
         bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING) # Create Atlas Name Data
         bc[c4d.DESC_NAME] = "Atlas Name"
@@ -393,7 +409,7 @@ def main():
         Cbc2[c4d.DESC_COLUMNS] = 2
 
         C2element = SamplesContainer.AddUserData(Cbc2)
-        SamplesContainer[C2element] = "Resolution"
+        #SamplesContainer[C2element] = "Resolution"
 
         bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_LONG) # Create Atlas Width Data
         bc[c4d.DESC_NAME] = "Atlas Width"
@@ -501,8 +517,8 @@ def main():
         
         print(currenName, len(currenName.split("_")))
 
-        if len(currenName.split("_")) > 2:
-            return gui.MessageDialog("Sub textues (samples) name patern is wrong. Should be like 'Atlas_TexName', have just one '_' divisor. This sample " + currenName + " have more.")
+        #if len(currenName.split("_")) > 2:
+            #return gui.MessageDialog("Sub textues (samples) name patern is wrong. Should be like 'Atlas_TexName', have just one '_' divisor. This sample " + currenName + " have more.")
 
         CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
         CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
@@ -539,9 +555,9 @@ def main():
                 CTag.SetMaterial(AtlasMaterial)
                 Csample.InsertTag(CTag, MVCTag)
 
-                oldPivotDiff = Csample[c4d.ID_USERDATA,2]
+                #oldPivotDiff = Csample[c4d.ID_USERDATA,2]
                 #print("oldPivotDiff", Csample, oldPivotDiff)
-                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + oldPivotDiff
+                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + 0
 
                 if SParent == SamplesContainer:
                     Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
@@ -647,7 +663,7 @@ def main():
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_COLUMNS] = 1
             ObjectExportGroup = Csample.AddUserData(bc)
-            Csample[ObjectExportGroup] = "OBJECT EXPORT INFO"
+            #Csample[ObjectExportGroup] = "OBJECT EXPORT INFO"
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
             bc[c4d.DESC_NAME] = "GAME PROPERTIES"
@@ -657,7 +673,7 @@ def main():
             bc[c4d.DESC_TITLEBAR] = True
             bc[c4d.DESC_COLUMNS] = 1
             GamePropertiesGroup = Csample.AddUserData(bc)
-            Csample[GamePropertiesGroup] = "GAME PROPERTIES"
+            #Csample[GamePropertiesGroup] = "GAME PROPERTIES"
 
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
             bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
@@ -890,6 +906,36 @@ def main():
             CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
             CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
             
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+            bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
+            bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_DEFAULT] = True
+            bc[c4d.DESC_TITLEBAR] = True
+            bc[c4d.DESC_COLUMNS] = 1
+            ObjectExportGroup = CInstance.AddUserData(bc)
+            #CInstance[ObjectExportGroup] = "OBJECT EXPORT INFO"
+
+            print("Instance", ObjectExportGroup)
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
+            bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
+            bc[c4d.DESC_SHORT_NAME] = "IsSpriteSheetSample"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
+            element = CInstance.AddUserData(bc)
+            CInstance[element] = True
+
+            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
+            bc[c4d.DESC_NAME] = "Sample Reference"
+            bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
+            bc[c4d.DESC_EDITABLE] = False
+            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
+            element = CInstance.AddUserData(bc)
+            CInstance[element] = Csample
+
             rotated = node.attrib.get("rotated") == "true"            
             if rotated:
                 #re-rotate the object

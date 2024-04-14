@@ -88,7 +88,7 @@ def main() -> None:
 
     # Called when the plugin is selected by the user. Similar to CommandData.Execute.
     LumaMap = doc.SearchObject("LumaMap")
-
+    
     # Create the root element of the XML structure
 
     LumaMapRoot.attrib = {
@@ -127,40 +127,58 @@ def main() -> None:
     ##### SITE MAPS  #####
     SiteMapsRoot = ET.SubElement(root, "SiteMaps")
     SiteMapsContainer = doc.SearchObject("SiteMapPieces")
-    
-    OblivionLandsBox = SiteMapsContainer.GetDown()
-    print(OblivionLandsBox.GetName())
-    
-    OblivionLandsBoxNode = ET.SubElement(SiteMapsRoot, "MapLocation")
-    OblivionLandsBoxNode.attrib = {
-        "TextureName": OblivionLandsBox.GetName(),
-        "scaleX": str(OblivionLandsBox[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]),
-        "scaleY": str(OblivionLandsBox[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
-        "positionX": str(OblivionLandsBox[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
-        "positionY": str(-OblivionLandsBox[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]),
-        "className": "MapLocation"
-    }
 
-    CurrentMapPiece = OblivionLandsBox.GetNext()
+    CurrentMapPiece = SiteMapsContainer.GetDown()
+    
     while CurrentMapPiece:
         #process_children(child)
         if CurrentMapPiece:
             print(CurrentMapPiece.GetName())
-    
+
+            mapType = CurrentMapPiece.GetName().split("_")[0]
+            className = mapType
+
+            ID = CurrentMapPiece.GetName().split("_")[1]
+
+            if(len(CurrentMapPiece.GetName().split("_")) > 2):
+                subID = CurrentMapPiece.GetName().split("_")[2]
+            else:
+                subID = ""
+
             SiteMapLocationNode = ET.SubElement(SiteMapsRoot, "MapLocation")
             SiteMapLocationNode.attrib = {
-                "siteName": CurrentMapPiece.GetName().split("_")[1],
+                "siteName": ID,
+                "textureName": ID,
+                "subID": subID,
                 "scaleX": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]),
                 "scaleY": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
                 "positionX": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
                 "positionY": str(-CurrentMapPiece[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]),
-                "className": "SiteMap"
+                "className": className
             }
+
+            subMapPiece = CurrentMapPiece.GetDown()
+
+            while subMapPiece:
+                if(len(subMapPiece.GetName().split("_")) > 2):
+                    pieceID = subMapPiece.GetName().split("_")[2]
+                else:
+                    pieceID = ""
+
+                SiteMapPieceLocationNode = ET.SubElement(SiteMapLocationNode, "SiteMapPiece")
+                SiteMapPieceLocationNode.attrib = {
+                    "pieceID": pieceID,
+                    "scaleX": str(subMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]),
+                    "scaleY": str(subMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
+                    "positionX": str(subMapPiece[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
+                    "positionY": str(-subMapPiece[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]),
+                }
+
+                subMapPiece = subMapPiece.GetNext()   
 
         CurrentMapPiece = CurrentMapPiece.GetNext() 
         
     ##### SITE MAPS  #####
-
 
     XMLFileName = "LandsOfOblivion_Maps.xml"
 
