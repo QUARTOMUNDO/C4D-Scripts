@@ -63,7 +63,7 @@ def setPivotDiff(TextureNode):
         else:
             CDIFFX = (originalCenterX - frameCenterX) * ScaleRatio
             CDIFFY = (originalCenterY - frameCenterY) * ScaleRatio
-            pivotDiff = c4d.Vector(-CDIFFX, -CDIFFY, 0)
+            pivotDiff = c4d.Vector(CDIFFX, -CDIFFY, 0)
     else:
         pivotDiff = c4d.Vector(0, 0, 0)
 

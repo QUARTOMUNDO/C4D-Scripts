@@ -234,13 +234,21 @@ def MaxAndMinCoord(coordinates):
     return [min_width, max_width, min_height, max_height]
 
 def SetPolygonVertexData(PolygonObject, node, SampleReference):
-    Refpolygon_count = SampleReference.GetPolygonCount()
-    if Refpolygon_count > 1:
-        print("Polygon:", PolygonObject.GetName(), "Sample Reference has more than 1 polygon. This mean it is a wrong ref (not a ref sample) and it's not supported. Poly count:", Refpolygon_count)
+    isPolygon = type(SampleReference) is c4d.PolygonObject
+
+    print("Reference Is Polygon? ", SampleReference.GetName(), " type: ", type(SampleReference), " ", isPolygon)
+
+    if isPolygon:
+        Refpolygon_count = SampleReference.GetPolygonCount()
+        if Refpolygon_count > 1:
+            print("Polygon:", SampleReference.GetName(), "Sample Reference has more than 1 polygon. This mean it is a wrong ref (not a ref sample) and it's not supported. Poly count:", Refpolygon_count)
+    else:
+        print("Provided object is not a polygon object ", PolygonObject)
+
 
     #print(type(PolygonObject), type(PolygonObject) is c4d.PolygonObject)
 
-    if PolygonObject is not None and type(PolygonObject) is c4d.PolygonObject:
+    if PolygonObject is not None and isPolygon:
         # Get the point count and list of points
         point_count = PolygonObject.GetPointCount()
         #points = PolygonObject.GetAllPoints()
@@ -336,8 +344,10 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             VertexNode.set('PointCount', str(4))
             VertexNode.set('Positions', vertex_positions)
             VertexNode.set('Coords', vertex_uvs)
+
+            print("Polygon:", PolygonObject.GetName(), "Processed")
     else:
-       raise ValueError("Provided object is not a polygon object ", PolygonObject)
+       print("Provided object is not a polygon object ", PolygonObject)
 
 def remap(value, old_min, old_max):
 
@@ -475,11 +485,9 @@ def Convert3DMatrixTo2DMatrix(obj, node):
     node.set('matrixB', str(-worldMatrix.v1.y))
     node.set('matrixC', str(-worldMatrix.v2.x))
     node.set('matrixD', str(worldMatrix.v2.y))
-    #node.set('matrixTx', str(obj[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_X] + (Bound.x /2)))
-    #node.set('matrixTy', str(-obj[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Y] + (Bound.y /2)))
 
-    node.set('matrixTx', str(obj.GetRelPos().x))
-    node.set('matrixTy', str(-obj.GetRelPos().y))
+    node.set('matrixTx', str(obj.GetRelPos().x))#???? Used for level collisions
+    node.set('matrixTy', str(-obj.GetRelPos().y))#??? Used for level collisions
 
 #Return value for a user data by name
 def GetUserData(obj, UDName, stopIfNone=True):
@@ -653,7 +661,7 @@ def findParallax(obj):
     distance = Group[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] + 1920
 
     if distance == 0:
-        parallax = 1;
+        parallax = 1
     else:
         parallax = (1/distance) * 1920
 
@@ -716,16 +724,16 @@ def PreDefineImage(obj, obj_node):
 
     #fixing code. Fix objects with wrong/none sample reference
     if SampleReference is None or SampleReference == obj:
-        print("Sample Reference is NONE", "Trying to get it")
+        print("Sample Reference is NONE", " Trying to get it")
         MissingSampleName = obj.GetName()
         MissingSampleName = MissingSampleName.split("_")
         MissingSampleName = MissingSampleName[0] + "_" + MissingSampleName[1] + "_Sample"
-        print("Sample Reference Missing Name", MissingSampleName)
+        print("Sample Reference Missing Name: ", MissingSampleName)
 
         MissingSampleRoot = doc.SearchObject('SiteSamples')
 
         if MissingSampleRoot is None:
-            raise ValueError("MissingSampleRoot is NONE", MissingSampleName, "Samples root should have this name")
+            raise ValueError("MissingSampleRoot is NONE ", MissingSampleName, " Samples root should have this name")
 
         SampleReference  = search_for_object(MissingSampleName, MissingSampleRoot)
         update_user_data(obj, "Sample Reference", SampleReference)
@@ -808,7 +816,7 @@ def PreDefineImage(obj, obj_node):
         obj_node.set('color', str(color))
     else:
         obj_node.set('alpha', str(1))
-        color = rgb_to_uint(c4d.Vector(255, 255, 255))
+        color = rgb_to_uint(c4d.Vector(1, 1, 1))
         obj_node.set('color', str(color))
 
     blendMode = GetUserData(obj, "blendMode", False)

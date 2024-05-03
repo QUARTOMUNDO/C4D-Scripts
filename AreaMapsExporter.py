@@ -138,7 +138,7 @@ def main() -> None:
             mapType = CurrentMapPiece.GetName().split("_")[0]
             className = mapType
 
-            ID = CurrentMapPiece.GetName().split("_")[1]
+            SiteName = CurrentMapPiece.GetName().split("_")[1]
 
             if(len(CurrentMapPiece.GetName().split("_")) > 2):
                 subID = CurrentMapPiece.GetName().split("_")[2]
@@ -147,8 +147,7 @@ def main() -> None:
 
             SiteMapLocationNode = ET.SubElement(SiteMapsRoot, "MapLocation")
             SiteMapLocationNode.attrib = {
-                "siteName": ID,
-                "textureName": ID,
+                "siteName": SiteName,
                 "subID": subID,
                 "scaleX": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]),
                 "scaleY": str(CurrentMapPiece[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
