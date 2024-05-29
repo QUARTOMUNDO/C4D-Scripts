@@ -1,12 +1,12 @@
-import c4d
+import c4d # type: ignore
 import xml.etree.ElementTree as ET
 import math
-from c4d import DescID, Vector, Matrix, utils
+from c4d import DescID, Vector, Matrix, utils # type: ignore
 from datetime import datetime
 import random
 import time
 from datetime import datetime
-from c4d import plugins, bitmaps
+from c4d import plugins, bitmaps # type: ignore
 import os
 
 PLUGIN_ID = 2242900
@@ -14,13 +14,24 @@ PLUGIN_ID = 2242900
 class SephiusXMLLevelExporter(plugins.CommandData):
     def Execute(self, doc):
         # Coloque aqui o código que seu script deve executar
-        main()
+        main(doc)
         # c4d.gui.MessageDialog("Exportador de Níveis XML Sephius Executado")
         return True
 
     def GetState(self, doc):
         # Retorna o estado do comando
         return c4d.CMD_ENABLED
+
+globalIDs = {}
+def verifyGlobalIDs(object, ID):
+    global globalIDs
+    for key in globalIDs:
+        if key != "None" and key == ID:
+            c4d.gui.MessageDialog("Duplicated GlobalID:" + ID + " Object: " + object.GetName() + " Please regenerate the ID for the NEWER object. Caution to NOT change ID for OLDER object since this can break game's save data")  # Isso vai imprimir o código de erro
+        return False
+    else:
+        globalIDs[ID] = 1
+        True
 
 def get_imageresult_description(result_code):
     # Dicionário que mapeia os códigos de resultado para descrições
@@ -57,39 +68,45 @@ if __name__ == "__main__":
     c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Sephius XML Level Exporter",
                                       info=0, icon=icon, help="Export levels to XML format",
                                       dat=SephiusXMLLevelExporter())
+    
 
-def createUserData(obj, paramName, dataType, value):
+# def createUserData(obj, paramName, dataType, value):
     #Add UserData storing
-    Cbc = c4d.GetCustomDataTypeDefault(dataType) # Create Group
-    Cbc[c4d.DESC_NAME] = paramName
-    Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    # Cbc = c4d.GetCustomDataTypeDefault(dataType) # Create Group
+    # Cbc[c4d.DESC_NAME] = paramName
+    # Cbc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
     #print("Has Group ? ", userDataGroup)
-    if userDataGroup:
-        Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
-    Celement = cObject.AddUserData(Cbc)
-    obj[Celement] = value
+    # if userDataGroup:
+        # Cbc[c4d.DESC_PARENTGROUP] = userDataGroup
+    # Celement = obj.AddUserData(Cbc)
+    # obj[Celement] = value
 
-def generate_number(total_digits):
-    total_digits = int(total_digits)
+total_digits = 0
+
+def generate_number(dtotal_digits):
+    global total_digits
+    total_digits = int(dtotal_digits)
 
     # Get current date and time
     now = datetime.now()
 
     # Convert to a string with format: day + month + year + hour + minute + second
-    timestamp_str = now.strftime("%d%m%Y%H%M%S")  # This will be 14 characters long
-    timestamp = int(timestamp_str)
+    timestamp_str = now.strftime("%d/%m/%Y-%H:%M:%S")  # This will be 14 characters long
+
 
     # Calculate how many random digits we need to add
     remaining_digits = total_digits - len(timestamp_str)
 
     # Generate a random number with the remaining number of digits
     random.seed()
-    random_number = random.randint(0, pow(10, total_digits))
+    random_number = random.randint(0, 100000)
 
     # Combine the timestamp and random number to get a 20-digit number
-    final_number = int(timestamp + random_number)
+    #final_number = int(timestamp_str + "-" + str(random_number))
+    
+    return timestamp_str + "-" + str(random_number)
 
-    return final_number
+
 
 def search_for_object(name, obj):
     """
@@ -179,58 +196,95 @@ def get_parameter_type(obj, parameter_id):
     else:
         return 'unknown'
 
+def get_user_data_tag(obj):
+    # Percorre as tags do objeto ativo para encontrar a tag de User Data
+    for tag in obj.GetTags():
+        if tag.GetType() == c4d.Tuserdata:
+            return tag
+    return None
 
-def get_userdata_values(obj, group_name):
-    user_data_dict = {}
-    #print('1', group_name)
-    if not obj:
-        return user_data_dict
+def get_user_data_tags(obj):
+    user_data_tags = {}
+    # Get all user data tags to retrive it's data. Ignore if expose to object is false
+    for tag in obj.GetTags():
+        if tag.GetType() == c4d.Tuserdata and tag[c4d.ID_EXPOSETAB] and tag.GetName() != "OBJECT EXPORT INFO":
+            user_data_tags[tag.GetName()] = tag
 
-    # Get the object's user data container
-    ud_container = obj.GetUserDataContainer()
+    return user_data_tags
 
-    for id, bc in ud_container:
-        # Check if the user data is in the specified group
-        parent_group_id = bc[c4d.DESC_PARENTGROUP]
+user_data_map = {}
+def build_user_data_map(obj, groups):
+    # Get the User Data tags from the object
+    tags = get_user_data_tags(obj)
+    userDataOwners = {}
 
-        #parentGroupContainer = ud_container[parent_group_id]
-        IDName = bc[c4d.DESC_NAME]
-       #print('ParentGroupID', parent_group_id, id, IDName, obj.GetName())
+    if not tags:
+        # If there is no User Data tag, the object itself is the owner of the User Data
+        userDataOwners[obj.GetName()] = obj
+        usingDataTags = False
+        #print("userDataOwners is main object", "obj: ", obj.GetName())	
+    else:
+        userDataOwners = tags
+        #print("userDataOwners is Tags: ", userDataOwners, "obj: ", obj.GetName())	
+        # If object is using User Data tag, ignore group filtering
+        groups = []
+        usingDataTags = True
 
-        try:
-           #print('ParentGroupIDName', obj[parent_group_id])
+    global user_data_map
+    user_data_map = {}
+    
+    # Iterate through objects that have User Data
+    for ownerName in userDataOwners:
+        #print("userDataOnwer: ", ownerName)
+        # Get the User Data from the tag
+        userDataOnwer = userDataOwners[ownerName]
+        user_data = userDataOnwer.GetUserDataContainer()
 
-            if (parent_group_id and obj[parent_group_id] == group_name) or (GroupNameAlt == group_name):
-                # Get the variable name and value
-                variable_name = bc[c4d.DESC_NAME]
-                variable_value = obj[id]
+        current_group_name = None
+            
+        # Iterate through the User Data to build the mapping
+        for desc_id, data in user_data:
+            parameter_name = data[c4d.DESC_NAME]
+            #print("parameter_name: ", parameter_name, "desc_id", desc_id, type(data))
+            #print("desc_id[0].dtype", desc_id[1].dtype, c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER)
+            # Check if the desc_id represents a group
+            if desc_id[1].dtype in [c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER]:
+                current_group_name = parameter_name
+                print(f"{parameter_name} is a group, it will not be mapped.")
+                continue
+            
+            # Check if the parameter belongs to the specified groups (in case it not using user data tags)
+            if(not usingDataTags and groups and current_group_name not in groups):
+                print(f"{parameter_name} is not present in one of the specified groups { groups }, it will not be mapped. Current group: { current_group_name }")
+                continue
+                    
+            # Access the value of the parameter using the complete desc_id structure
+            #print("desc_id[1].dtype: ", desc_id[1].dtype)
 
-                #Bool Conversion. e verify if value has UINT which means it is real or vector
-                #Maybe don't work if data is int'
-                if bc[c4d.DESC_UNIT] is None:
-                    if variable_value == 0:
-                        variable_value = 'false'
-                    elif variable_value == 1:
-                        variable_value = 'true'
-                else:
-                    #remove .0 a the end of int numbers
-                    if len(str(variable_value).split(".")) > 1:
-                        if str(variable_value).split(".")[1] == '0':
-                            variable_value = str(variable_value).split(".")[0]
+            if desc_id[1].dtype in [c4d.DTYPE_BOOL, c4d.CUSTOMGUI_BOOL, c4d.ID_GV_DATA_TYPE_BOOL, c4d.MD_BOOL, c4d.MD_TYPE_MD_BOOL]:   
+                parameter_value = userDataOnwer[desc_id]
+                if parameter_value == 1:
+                    parameter_value = "true"
+                else:   
+                    parameter_value = "false"
+            else:
+                parameter_value = userDataOnwer[desc_id]
 
-               #print("variable_value", bc[c4d.DESC_UNIT], variable_name, variable_value )
+            #print("parameter_value: ", parameter_value)
+            
+            user_data_map[parameter_name] = {"paramName":parameter_name, "paramValue": parameter_value, "group": current_group_name, "dataOwner": userDataOnwer}
+            #print("")
+    
+    return user_data_map
 
-                # Get the parameter data type
-                #data_entry = bc.GetCustomDataType(id)
-                #dtype = data_entry.GetValue()
 
-                #print('5', group_name, variable_name, ud_type, variable_value, bool(variable_value))
-                user_data_dict[variable_name] =  str(variable_value)
-        except:
-           #print('GroupNameAlt', IDName)
-            GroupNameAlt = IDName
+def get_user_data_value(parameter_name):
+    global user_data_map
 
-    return user_data_dict
+    # Verifica se o parâmetro existe no mapeamento e retorna seu valor
+    if parameter_name in user_data_map:
+        return user_data_map[parameter_name]["value"]
+    return None
 
 def indxTrans(j):
     #  <p>The indices of the vertices are arranged like this:</p>
@@ -287,12 +341,12 @@ def MaxAndMinCoord(coordinates):
 def SetPolygonVertexData(PolygonObject, node, SampleReference):
     isPolygon = type(SampleReference) is c4d.PolygonObject
 
-    print("Reference Is Polygon? ", SampleReference.GetName(), " type: ", type(SampleReference), " ", isPolygon)
+    #print("Reference Is Polygon? ", SampleReference.GetName(), " type: ", type(SampleReference), " ", isPolygon)
 
     if isPolygon:
         Refpolygon_count = SampleReference.GetPolygonCount()
-        if Refpolygon_count > 1:
-            print("Polygon:", SampleReference.GetName(), "Sample Reference has more than 1 polygon. This mean it is a wrong ref (not a ref sample) and it's not supported. Poly count:", Refpolygon_count)
+        #if Refpolygon_count > 1:
+            #print("Polygon:", SampleReference.GetName(), "Sample Reference has more than 1 polygon. This mean it is a wrong ref (not a ref sample) and it's not supported. Poly count:", Refpolygon_count)
     else:
         print("Provided object is not a polygon object ", PolygonObject)
 
@@ -396,7 +450,7 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             VertexNode.set('Positions', vertex_positions)
             VertexNode.set('Coords', vertex_uvs)
 
-            print("Polygon:", PolygonObject.GetName(), "Processed")
+            #print("Polygon:", PolygonObject.GetName(), "Processed")
     else:
        print("Provided object is not a polygon object ", PolygonObject)
 
@@ -443,7 +497,7 @@ def GetPolygonPointsCoords(PolygonObject):
 
         return vertex_uvs
     else:
-       raise ValueError("Provided object is not a spline ", SplineObject)
+       raise ValueError("Provided object is not a spline ")
 
 def GetSplinePointsPositions(SplineObject):
     if SplineObject is not None and type(SplineObject)is c4d.SplineObject:
@@ -542,20 +596,30 @@ def Convert3DMatrixTo2DMatrix(obj, node):
 
 #Return value for a user data by name
 def GetUserData(obj, UDName, stopIfNone=True):
-    #print("obj: ", obj, obj.GetName())
-
-    for id, bc in obj.GetUserDataContainer():
-        #print("bc[c4d.DESC_NAME: ", bc[c4d.DESC_NAME])
-        #obj[id]
-        #print("obj[id]: ", obj[id])
-        obID = obj[id]
-        if bc[c4d.DESC_NAME] == UDName:
-            return obj[id]
-
     if(stopIfNone == True):
         if(obj is None):
             raise ValueError("Object is None")
-        raise ValueError(UDName, "is None")
+        if(UDName is None):
+            raise ValueError(UDName, "is None")
+    
+    #print("obj: ", obj, obj.GetName())
+    
+    for id, bc in obj.GetUserDataContainer():
+        # Print debug information about the user data
+        #print("UserData Name: ", bc[c4d.DESC_NAME])
+        #print("Parameter ID: ", id)
+        
+        #print("bc[c4d.DESC_NAME: ", bc[c4d.DESC_NAME])
+        #obj[id]
+        #print("obj[id]: ", obj[id])
+        #obID = obj[id]
+        if bc[c4d.DESC_NAME] == UDName:
+            try:
+                return obj[id]
+            except AttributeError as e:
+                #print(f"AttributeError: {e}")
+                print(f"Failed to access parameter with ID {id} on object {obj.GetName()}")
+                raise AttributeError(UDName, f"AttributeError: {e}")
 
     return "None"
 
@@ -576,7 +640,7 @@ def getChildByName(obj, name, halt=True):
     return None
 
 LocalID = -1
-def PreDefineLevelArea(obj, obj_node):
+def PreDefineLevelArea(obj, obj_node, doc):
     global AreaRoot  
     global LocalID
 
@@ -621,7 +685,7 @@ def PreDefineLevelArea(obj, obj_node):
     print("AREA PROCESSED", obj.GetName())
     print("==============")
 
-def PreDefineLevelBackground(obj, obj_node):
+def PreDefineLevelBackground(obj, obj_node, doc):
     global AreaRoot
     AreaRoot = obj
     print("BGRoot", AreaRoot.GetName())
@@ -645,7 +709,7 @@ def PreDefineLevelBackground(obj, obj_node):
     print("BACKGROUND PROCESSED", obj.GetName())
     print("==============")
 
-def PreLevelCollision(obj, obj_node):
+def PreLevelCollision(obj, obj_node, doc):
     ObjectName = obj.GetName().split('.')[0]
 
     obj_node.set('name', obj.GetName())
@@ -660,7 +724,7 @@ def PreLevelCollision(obj, obj_node):
     print("LEVEL COLLISION PROCESSED", obj.GetName())
     print("==============")
 
-def PreDefineContainer(obj, obj_node):
+def PreDefineContainer(obj, obj_node, doc):
     global CurrentContainer
     CurrentContainer = obj
 
@@ -679,7 +743,7 @@ def PreDefineContainer(obj, obj_node):
     print("Container PROCESSED", obj.GetName())
     print("==============")
 
-def PreDefineGameSprite(obj, obj_node):
+def PreDefineGameSprite(obj, obj_node, doc):
     ObjectName = obj.GetName()
 
     obj_node.set('name',  ObjectName)
@@ -720,7 +784,7 @@ def findParallax(obj):
 
     return parallax
 
-def PreDefineRawCollision(obj, obj_node):
+def PreDefineRawCollision(obj, obj_node, doc):
     ObjectName = obj.GetName().split('.')[0]
 
     #print(obj_node)
@@ -741,11 +805,11 @@ def PreDefineRawCollision(obj, obj_node):
     obj_node.set('rotation',  str(obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]))
     obj_node.set('points',  GetSplinePointsPositions(obj))
 
-    print("==============")
-    print("Raw COLLISION PROCESSED", obj.GetName())
-    print("==============")
+    #print("==============")
+    #print("Raw COLLISION PROCESSED", obj.GetName())
+    #print("==============")
 
-def PreDefineBoxCollision(obj, obj_node):
+def PreDefineBoxCollision(obj, obj_node, doc):
     ObjectName = obj.GetName().split('.')[0]
 
     #print(obj_node)
@@ -769,7 +833,9 @@ def PreDefineBoxCollision(obj, obj_node):
     #print("BOX  COLLISION PROCESSED")
     #print("==============")
 
-def PreDefineImage(obj, obj_node):
+def PreDefineImage(obj, obj_node, doc):
+    objCache = obj.GetCache()
+
     SampleReference = GetUserData(obj, "Sample Reference")
     #print(SampleReference)
 
@@ -781,8 +847,8 @@ def PreDefineImage(obj, obj_node):
         MissingSampleName = MissingSampleName[0] + "_" + MissingSampleName[1] + "_Sample"
         print("Sample Reference Missing Name: ", MissingSampleName)
 
-        global doc 
-        update_doc()   
+        #global doc 
+        #update_doc()   
             
         MissingSampleRoot = doc.SearchObject('SiteSamples')
 
@@ -807,7 +873,7 @@ def PreDefineImage(obj, obj_node):
 
     obj_node.tag = className
     ObjectName = className
-   #print(obj.GetName(), type(obj))
+    #print(obj.GetName(), type(obj))
     #obj_node.set('name', ObjectName)
 
     #print (type(obj).__name__)
@@ -821,8 +887,10 @@ def PreDefineImage(obj, obj_node):
 
     #We use the data from the original sample if this is a Instance
     if (type(obj).__name__ == "InstanceObject"):
+        #print("InstanceObject", obj.GetName())
         obj_node.set('type', "Instance")
     else:
+        #print("ImageObject", obj.GetName())
         obj_node.set('type', "Polygon")
 
     obj_node.set('className', className)
@@ -848,9 +916,16 @@ def PreDefineImage(obj, obj_node):
     obj_node.set('transformMode', "normal")
 
     SetElementTransformWorldSpace(obj, obj_node)
+    
+    #DO NOT remove print bellow. 
+    #Script can result in error due strange behavior of cinema 4D (garbage collection?)
+    print("ObjectName", obj.GetName(), " objCache", objCache, "Alive?", obj.IsAlive())
 
     # Get the vertex map tag by name
-    vtag = obj.GetTag(c4d.Tvertexcolor)
+    if(objCache is not None):
+        vtag = objCache.GetTag(c4d.Tvertexcolor)
+    else:
+        vtag = obj.GetTag(c4d.Tvertexcolor)
 
     #print('--------------------------------')
     #print('Tag ', vtag)
@@ -900,40 +975,49 @@ def BoundsString(x, y, w, h):
     BoundsStr = "(x=" + str(x) + ", " + "y=" + str(y) + ", " + "w=" + str(w) + ", " + "h=" + str(h) + ")"
     return BoundsStr
 
-def PreDefineGameObject(obj, obj_node):
-    className = GetUserData(obj, "className", False)
+def PreDefineGameObject(obj, obj_node, doc):
+    print("==============")
+    print("Object Name: ", obj.GetName())
+    UserDataValues = build_user_data_map(obj, ["GAME PROPERTIES"])
+    
+    if "globalID" in UserDataValues:
+        className = UserDataValues["className"]["paramValue"]
+    else:
+        className = GetUserData(obj, "className")
+
+    print("GameObject Class: ", className)
 
     obj_node.tag = className.split('.')[-1]
     ObjectName = obj.GetName()
 
-    #print(obj.GetName(), type(obj))
     obj_node.set('name', ObjectName)
 
-    #print(className)
+    global total_digits
 
-    #SampleReference = GetUserData(obj, "Sample Reference")
+    if "globalID" in UserDataValues:
+        globalID = UserDataValues["globalID"]["paramValue"]
+    else:
+        globalID = "None"#ignore id if there no parameter with this name
 
-    obj_node.set('className', className)
+    print("GlobalID: ", globalID, "Object Name: ", obj.GetName())
+    if globalID is None or globalID == "":
+        globalID = str(generate_number(total_digits))
+        update_user_data(UserDataValues["globalID"]["dataOwner"], "globalID", globalID)
 
-    if HasUserData(obj, "globalID"):
-        globalID = GetUserData(obj, "globalID", stopIfNone=False)
-        if globalID is None:
-            globalID = str(generate_number(total_digits))
-            update_user_data(obj, "globalID", globalID)
-
+    verifyGlobalIDs(obj, globalID)
+    
     SetElementTransformLocalSpace(obj, obj_node)
 
-    obj_node.set("scaleOffsetX", str(1))
-    obj_node.set("scaleOffsetY", str(1))
+    obj_node.set("scaleOffsetX", str(1))#??
+    obj_node.set("scaleOffsetY", str(1))#??
 
-    UserDataValues = get_userdata_values(obj, "GAME PROPERTIES")
     obj_node.set('group', str(getGroupByParent(obj)))
-
+ 
     for name, value in UserDataValues.items():
         if name not in ["name", "width", "height"]:
-            #print('UserData', "{}: {}".format(name, value))
-            obj_node.set(name, str(value))
-
+            obj_node.set(name, str(value["paramValue"]))
+            print('Game Object UserData ', "{}: {}".format(name, value))
+            
     bounds = defineObjectBounds(obj)
 
     if bounds[1] is not None:
@@ -947,11 +1031,11 @@ def PreDefineGameObject(obj, obj_node):
             obj_node.set("height", str(bounds[1].y))
             obj_node.set("shapeType", "Box")
 
-    #print("==============")
-    #print("GAME OBJECT PROCESSED")
-    #print("==============")
+    print("==============")
+    print("GAME OBJECT PROCESSED")
+    print("==============")
 
-def PreDefineCompound(obj, obj_node, indent):
+def PreDefineCompound(obj, obj_node, indent, doc):
     HasModifiers = has_modifier_child(obj)
 
     #print(obj.GetName(), "Has Modifiers?", HasModifiers)
@@ -961,7 +1045,7 @@ def PreDefineCompound(obj, obj_node, indent):
     ObjeParent = obj.GetUp()
 
     if HasModifiers == False:
-        CompoundCache = obj.GetCache()
+        CompoundCache = obj.GetCache()#caution with this. Can create problems with garbage collection
     else:
         # Use SendModelingCommand to create a new object from the current state
         new_object = utils.SendModelingCommand(command=c4d.MCOMMAND_CURRENTSTATETOOBJECT,
@@ -983,7 +1067,7 @@ def PreDefineCompound(obj, obj_node, indent):
     if CompoundCache:
         #print(f"Compound object: {obj.GetName()}")
         #print(f"Cache: {CompoundCache.GetName()}")
-        parse_objects(CompoundCache, obj_node, ShouldGenerateNode(CompoundCache), indent, True)
+        parse_objects(CompoundCache, obj_node, ShouldGenerateNode(CompoundCache), doc, indent, True)
     #else:
         #print("Compound cache not found")
 
@@ -1033,7 +1117,10 @@ def defineObjectBounds(obj):
 def SetElementTransformLocalSpace(obj, obj_node):
     obj_node.set('x', str(obj.GetAbsPos().x))
     obj_node.set('y', str(-obj.GetAbsPos().y))
-    obj_node.set('rotation', str(obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]))
+    rotation = obj[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]
+    rotation = str(math.degrees(rotation))
+
+    obj_node.set('rotation', rotation)
 
     #for this cases we can't have negative scales'
     scaleX = (obj[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X])
@@ -1046,18 +1133,21 @@ def SetElementTransformLocalSpace(obj, obj_node):
     obj_node.set('scaleY', str(abs(scaleY)))
 
 def handle_negative_scale(rotation, scale, originalScale):
+    # Handle negative scale when both x and y are negative
     if (originalScale.x < 0 and originalScale.y < 0):
         rotation += math.pi
         scale.x *= -1
         scale.y *= -1
 
+    # Handle negative scale when only x is negative
     if originalScale.x < 0:
         rotation += math.pi
         scale.x *= -1
-
+        
+    # Handle negative scale when only y is negative
     if originalScale.y < 0:
         rotation += math.pi
-        scale.y *= 1
+        #scale.y *= 1
         scale.x *= -1
 
     return rotation, scale
@@ -1087,10 +1177,10 @@ def SetElementTransformWorldSpace(obj, obj_node):
         output_matrix.v3.GetLength(),
     )
     rotation = c4d.utils.MatrixToHPB(output_matrix).z
-
+    
     # Handle negative scale
     rotation, scale = handle_negative_scale(rotation, scale, obj[c4d.ID_BASEOBJECT_REL_SCALE])
-
+    
     # Set object node attributes
     obj_node.set('x', str(position.x))
     obj_node.set('y', str(-position.y))
@@ -1098,7 +1188,7 @@ def SetElementTransformWorldSpace(obj, obj_node):
     obj_node.set('scaleX', str(scale.x))
     obj_node.set('scaleY', str(scale.y))
 
-def PreDefineBase(obj, obj_node):
+def PreDefineBase(obj, obj_node, doc):
     ObjectName = obj.GetName()
     #print(obj.GetName(), type(obj))
 
@@ -1153,38 +1243,39 @@ def ShouldGenerateNode(obj):
     else:
         return False
 
-def PreDefineObjectType(obj, obj_node):
+def PreDefineObjectType(obj, obj_node, doc, indent):
     ObjectID = obj.GetName().split('.')[0]
 
     if(ObjectID == "LevelArea"):
-        PreDefineLevelArea(obj, obj_node)
+        PreDefineLevelArea(obj, obj_node, doc)
     elif ObjectID in ["LevelCollision", "DamageCollision"]:
-        PreLevelCollision(obj, obj_node)
+        PreLevelCollision(obj, obj_node, doc)
     elif(ObjectID == "BoxShape"):
-        PreDefineBoxCollision(obj, obj_node)
+        PreDefineBoxCollision(obj, obj_node, doc)
     elif(ObjectID == "RawShape"):
-        PreDefineRawCollision(obj, obj_node)
+        PreDefineRawCollision(obj, obj_node, doc)
     elif(ObjectID == "GameSprite"):
-        PreDefineGameSprite(obj, obj_node)
+        PreDefineGameSprite(obj, obj_node, doc)
     elif ObjectID in ["AnimationContainer", "SpriteContainer", "QuadBatchContainer"]:
-        PreDefineContainer(obj, obj_node)
+        PreDefineContainer(obj, obj_node, doc)
     elif(ObjectID == "LevelBackground"):
-        PreDefineLevelBackground(obj, obj_node)
+        PreDefineLevelBackground(obj, obj_node, doc)
     elif(ObjectID == "Base"):
-        PreDefineBase(obj, obj_node)
+        PreDefineBase(obj, obj_node, doc)
 
     #Special Type of Objects composed by Clonners and other special techniques
     elif(ObjectID == "Compound"):
-        PreDefineCompound(obj, obj_node)
+        PreDefineCompound(obj, obj_node, indent, doc)
 
     #Images inside containers
     elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
-        PreDefineImage(obj, obj_node)
+        PreDefineImage(obj, obj_node, doc)
+
     elif((GetUserData(obj, "IsGameObject", False)) == True):
-        PreDefineGameObject(obj, obj_node)
+        PreDefineGameObject(obj, obj_node, doc)
 
 
-def parse_objects(obj, parent_node, GenerateNode, indent=0, Cached=False):
+def parse_objects(obj, parent_node, GenerateNode, doc, indent=0, Cached=False):
 
     #This function recursively parses through all children of the given object
     #and creates an XML describing their position, rotation, scale, and any user data.
@@ -1201,12 +1292,12 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0, Cached=False):
         PassNode.tail = '\n' + ' ' * (indent + 2)
 
         #Process the object
-        PreDefineObjectType(obj, PassNode)
+        PreDefineObjectType(obj, PassNode, doc, indent)
 
     elif ObjectID == "Compound" and Cached == False:# Process compound objects
         #print("Compound Object Detected")
         PassNode = parent_node;
-        PreDefineCompound(obj, PassNode, indent)
+        PreDefineCompound(obj, PassNode, indent, doc)
 
     else:
         PassNode = parent_node;
@@ -1218,25 +1309,29 @@ def parse_objects(obj, parent_node, GenerateNode, indent=0, Cached=False):
 
     if ObjectID not in ["Compound"] or  Cached == True:
         # Invert the order of the children list
+        #print("Processing Children of ", obj)
+        #print("Processing Children of ", obj.GetName())
+        print("Testing Child alive ", obj.IsAlive())#removing this could make script crash for some unknown reason reaon (garbage collection?)
+        #print("Testing Child retrive ", obj.GetDown())
         children = obj.GetChildren()[::-1]
         # Recursively parse through all children of the current object
         for child in children:
-            parse_objects(child, PassNode, ShouldGenerateNode(child), NextIdent, Cached)
+            parse_objects(child, PassNode, ShouldGenerateNode(child), doc, NextIdent, Cached)
 
     if(GenerateNode):
         # Add line breaks and indentation to the closing XML string
         parent_node.text = '\n' + ' ' * indent
         PassNode.tail = '\n' + ' ' * indent
 
-doc = c4d.documents.GetActiveDocument()
-def update_doc():
-    global doc
-    doc = c4d.documents.GetActiveDocument()
+#doc = c4d.documents.GetActiveDocument()
+#def update_doc():
+    #global doc
+    #doc = c4d.documents.GetActiveDocument()
 
-def main():
+def main(doc):
     global Root
-    global doc 
-    update_doc()
+    #global doc 
+    #update_doc()
 
     Root = doc.SearchObject('LANDS OF OBLIVION')
 
@@ -1271,7 +1366,7 @@ def main():
     save_path = c4d.storage.SaveDialog(def_path=XMLFileName)
 
     # Parse through all children of the active object
-    parse_objects(obj, root, False, 2)
+    parse_objects(obj, root, False, doc, 2)
     print("Finished Parsing")
 
     # Write the XML tree to a file
@@ -1281,3 +1376,9 @@ def main():
         tree.write(save_path, encoding='utf-8', xml_declaration=False)
         print("Done!!!!")
         c4d.gui.MessageDialog("Export successful! File saved to: " + save_path)
+
+    global globalIDs    
+    globalIDs = {} #reset globalIDs
+
+    global total_digits
+    total_digits = 0

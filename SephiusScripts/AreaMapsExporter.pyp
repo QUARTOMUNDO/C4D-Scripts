@@ -1,8 +1,8 @@
 from typing import Optional
-import c4d
+import c4d # type: ignore
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
-from c4d import plugins, bitmaps
+from c4d import plugins, bitmaps # type: ignore
 import os
 PLUGIN_ID = 2242901
 
@@ -12,7 +12,7 @@ op: Optional[c4d.BaseObject]  # The active object, None if unselected
 class AreaMapsExporter(plugins.CommandData):
     def Execute(self, doc):
         # Coloque aqui o código que seu script deve executar
-        main()
+        main(doc)
         # c4d.gui.MessageDialog("Exportador de Níveis XML Sephius Executado")
         return True
 
@@ -52,7 +52,7 @@ def load_icon():
 if __name__ == "__main__":
     icon = load_icon()
     # Registra o plugin no Cinema 4D
-    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Area Maps Exporter",
+    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Sephius Area Maps Exporter",
                                       info=0, icon=icon, help="Export Area Maps to XML file",
                                       dat=AreaMapsExporter())
 
@@ -63,7 +63,7 @@ def color_to_value(color):
 
 def color_to_luma(color):
     #print(color.x)
-    if(color.x > 0.5):
+    if(color > 0.5):
         return "1"
     else:
         return "0"
@@ -88,7 +88,7 @@ def indent(elem, level=0):
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
 
-def main() -> None:
+def main(doc) -> None:
     root = ET.Element("AreaMaps")
     root.attrib = {"regionName": "LANDS_OF_OBLIVION"}
 
@@ -97,36 +97,53 @@ def main() -> None:
 
     # Called when the plugin is selected by the user. Similar to CommandData.Execute.
     AreaMap = doc.SearchObject("AreaMap")
+    AreaMapCache = AreaMap.GetCache()
 
     # Create the root element of the XML structure
+    mapWidth = AreaMap[c4d.PRIM_PLANE_SUBW]
+    mapHeight = AreaMap[c4d.PRIM_PLANE_SUBH]
+    bbox = AreaMap.GetRad()
+    halfWidth = bbox.x
+    halfHeight = bbox.y
+    scaleX = AreaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]
+    scaleY = AreaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]
+    
+    print("mapWidth:", mapWidth)
+    print("mapHeight:", mapHeight)
+    print("scaleX:", scaleX)
+    print("scaleY:", scaleY)
+
+    positionX = AreaMapCache.GetMg().off.x - (halfWidth * scaleX)
+    positionY = -AreaMapCache.GetMg().off.y - (halfHeight * scaleY)
 
     AreaMapRoot.attrib = {
         "unkownAreaGlonalID": "99",
-        "numberOfColors": "Unknown",
-        "mapWidth": "128",
-        "mapHeight": "64",
-        "scaleX": str(AreaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
-        "scaleY": str(AreaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Z]),
-        "positionX": str(AreaMap[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
-        "positionY": str(-AreaMap[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y])
+        "numberOfColors": "256",
+        "mapWidth": str(mapWidth),
+        "mapHeight": str(mapHeight),
+        "scaleX": str(scaleX),
+        "scaleY": str(scaleY),
+        "positionX": str(positionX),
+        "positionY": str(positionY)
     }
 
-    vColorTag = AreaMap.GetTag(c4d.Tvertexcolor)
-    if not vColorTag:
-        print("No VertexColorTag found on the object")
+    vMapTag = AreaMapCache.GetTag(c4d.Tvertexmap)
+    if not vMapTag:
+        print("No Vertex Map Tag found on the object")
         return
 
-    # Get the bitmap from the VertexColorTag
-    data = vColorTag.GetDataAddressR()
+    # Get the vertex map data
+    data = getTagData(vMapTag)
 
-    # Iterate through points to get the color and convert it to a value
-    for i in range(128):  # Assuming a height of 64
+    # Iterate through points to get the value
+    for i in range(mapHeight):
         AreaMapValueElement = ET.SubElement(AreaMapRoot, "MapValue")
         values = []
 
-        for i2 in range(64):  # Assuming a width of 128
-            value = c4d.VertexColorTag.GetPoint(data, None, None, i * 64 + i2)
-            value = color_to_value(value)
+        for j in range(mapWidth):
+            index = j + i * (mapWidth + 1)  # Calculate the correct index based on the plane segments
+            value = data[index]
+            value = str(round(value * 100))
             values.append(value)
 
         AreaMapValueElement.attrib = {"values": ",".join(values)}
@@ -138,35 +155,51 @@ def main() -> None:
 
     # Called when the plugin is selected by the user. Similar to CommandData.Execute.
     LumaMap = doc.SearchObject("LumaMap")
+    LumaMapCache = LumaMap.GetCache()
     
     # Create the root element of the XML structure
 
+    # Create the root element of the XML structure
+    mapWidth = LumaMap[c4d.PRIM_PLANE_SUBW]
+    mapHeight = LumaMap[c4d.PRIM_PLANE_SUBH]
+
+    bbox = AreaMap.GetRad()
+    halfWidth = bbox.x
+    halfHeight = bbox.y
+
+    scaleX = LumaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_X]
+    scaleY = LumaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]
+
+    positionX = AreaMapCache.GetMg().off.x - (halfWidth * scaleX)
+    positionY = -AreaMapCache.GetMg().off.y - (halfHeight * scaleY)
+
     LumaMapRoot.attrib = {
         "unkownAreaGlonalID": "99",
-        "numberOfColors": "0",
-        "mapWidth": "256",
-        "mapHeight": "128",
-        "scaleX": str(LumaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Y]),
-        "scaleY": str(LumaMap[c4d.ID_BASEOBJECT_REL_SCALE,c4d.VECTOR_Z]),
-        "positionX": str(LumaMap[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]),
-        "positionY": str(-LumaMap[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y])
+        "numberOfColors": "1",
+        "mapWidth": str(mapWidth),
+        "mapHeight": str(mapHeight),
+        "scaleX": str(scaleX),
+        "scaleY": str(scaleY),
+        "positionX": str(positionX),
+        "positionY": str(positionY)
     }
 
-    vColorTag = LumaMap.GetTag(c4d.Tvertexcolor)
-    if not vColorTag:
-        print("No VertexColorTag found on the object")
+    vMapTag = LumaMapCache.GetTag(c4d.Tvertexmap)
+    if not vMapTag:
+        print("No Vertex Map Tag found on the object")
         return
 
-    # Get the bitmap from the VertexColorTag
-    data = vColorTag.GetDataAddressR()
+    # Get the vertex map data
+    data = getTagData(vMapTag)
 
-    # Iterate through points to get the color and convert it to a value
-    for i in range(256):  # Assuming a height of 64
+    # Iterate through points to get the value
+    for i in range(mapHeight):
         LumaMapValueElement = ET.SubElement(LumaMapRoot, "MapValue")
         values = []
 
-        for i2 in range(128):  # Assuming a width of 128
-            value = c4d.VertexColorTag.GetPoint(data, None, None, i * 128 + i2)
+        for j in range(mapWidth):
+            index = j + i * (mapWidth + 1)  # Calculate the correct index based on the plane segments
+            value = data[index]
             value = color_to_luma(value)
             values.append(value)
 
@@ -174,7 +207,7 @@ def main() -> None:
 
     ##### LUMA MAP  #####
 
-    ##### SITE MAPS  #####
+    ##### SITE MAPS  #####ss
     SiteMapsRoot = ET.SubElement(root, "SiteMaps")
     SiteMapsContainer = doc.SearchObject("SiteMapPieces")
 
@@ -251,3 +284,7 @@ def main() -> None:
         c4d.gui.MessageDialog("Export successful! File saved to: " + save_path)
 
     print(xmlString)
+
+def getTagData(vMapTag):
+    data = vMapTag.GetAllHighlevelData()
+    return data

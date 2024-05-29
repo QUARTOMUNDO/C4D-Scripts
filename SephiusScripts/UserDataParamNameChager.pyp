@@ -1,10 +1,10 @@
 import c4d
-from c4d import plugins, bitmaps
+from c4d import plugins, bitmaps # type: ignore
 import os
 
 PLUGIN_ID = 2242904
 
-class ChangeUserDataParamName(plugins.CommandData):
+class UserDataParamNameChager(plugins.CommandData):
     def Execute(self, doc):
         # Coloque aqui o código que seu script deve executar
         main()
@@ -15,18 +15,19 @@ class ChangeUserDataParamName(plugins.CommandData):
         # Retorna o estado do comando
         return c4d.CMD_ENABLED
 
+
 def get_imageresult_description(result_code):
     # Dicionário que mapeia os códigos de resultado para descrições
     descriptions = {
-        c4d.IMAGERESULT_OK: "Success",
-        c4d.IMAGERESULT_NOTEXISTING: "File does not exist",
-        c4d.IMAGERESULT_WRONGTYPE: "Wrong type",
-        c4d.IMAGERESULT_OUTOFMEMORY: "Out of memory",
-        c4d.IMAGERESULT_FILEERROR: "File error",
-        c4d.IMAGERESULT_FILESTRUCTURE: "Corrupt file structure",
-        c4d.IMAGERESULT_MISC_ERROR: "Miscellaneous error"
+    c4d.IMAGERESULT_OK: "Success",
+    c4d.IMAGERESULT_NOTEXISTING: "File does not exist",
+    c4d.IMAGERESULT_WRONGTYPE: "Wrong type",
+    c4d.IMAGERESULT_OUTOFMEMORY: "Out of memory",
+    c4d.IMAGERESULT_FILEERROR: "File error",
+    c4d.IMAGERESULT_FILESTRUCTURE: "Corrupt file structure",
+    c4d.IMAGERESULT_MISC_ERROR: "Miscellaneous error"
     }
-    
+
     # Retorna a descrição correspondente ao código, ou uma string padrão se o código não for conhecido
     return descriptions.get(result_code, "Unknown error code")
 
@@ -34,12 +35,12 @@ def get_imageresult_description(result_code):
 def load_icon():
     # Obtém o diretório do script atual
     dir_path = os.path.dirname(__file__)
-    icon_path = os.path.join(dir_path, "GlobalIDGenerator.tif")
+    icon_path = os.path.join(dir_path, "UserDataParamNameChager.tif")
     bmp = bitmaps.BaseBitmap()
     result = bmp.InitWith(icon_path)
     if result[0] != c4d.IMAGERESULT_OK:
         error_message = get_imageresult_description(result[0])
-        #c4d.gui.MessageDialog("Falha ao carregar o ícone:" + error_message)  # Isso vai imprimir o código de erro
+        c4d.gui.MessageDialog("Falha ao carregar o ícone:" + error_message)  # Isso vai imprimir o código de erro
         return None
     return bmp
 
@@ -47,24 +48,34 @@ def load_icon():
 if __name__ == "__main__":
     icon = load_icon()
     # Registra o plugin no Cinema 4D
-    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Global ID Generator",
-                                      info=0, icon=icon, help="Generates unique Global IDs for selected objects",
-                                      dat=ChangeUserDataParamName())
+    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Sephius User Data Param Name Chager",
+                                      info=0, icon=icon, help="Change the name of a User Data",
+                                      dat=UserDataParamNameChager())
+ 
+doc = c4d.documents.GetActiveDocument()
+def update_doc():
+    global doc
+    doc = c4d.documents.GetActiveDocument()
 
 def main():
+    global doc 
+    update_doc()
+
     # Get the active selection in the scene
     selection = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_CHILDREN)
 
     if not selection:
-        c4d.gui.MessageDialog("No objects selected.")
+        c4d.gui.MessageDialog("[UserDataParamNameChager] No objects selected.")
         return
 
     # Name of the User Data Parameter you want to change
-    parameter_name = "rewardName"
+    parameter_name = c4d.gui.InputDialog("Enter the name of the User Data Parameter you want to change:")
 
     # New name for the User Data Parameter
-    new_parameter_name = "rewardID"
+    new_parameter_name = c4d.gui.InputDialog("Enter the new name for the User Data Parameter:")
     
+    print("parameter_name: ", parameter_name, "new_parameter_name: ", new_parameter_name)
+
     print("selection: ", selection)
     
     # Iterate through the selected objects
@@ -94,8 +105,3 @@ def main():
 
     # Update the scene to reflect the changes
     c4d.EventAdd()
-
-
-# Call the main function
-if __name__ == '__main__':
-    main()

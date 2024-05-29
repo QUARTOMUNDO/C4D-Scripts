@@ -1,18 +1,18 @@
-import c4d
+import c4d # type: ignore
 import os
-from c4d import gui
-from c4d import storage
-from c4d import utils
+from c4d import gui # type: ignore
+from c4d import storage # type: ignore
+from c4d import utils # type: ignore
 from xml.etree import ElementTree
 import math 
-from c4d import plugins, bitmaps
+from c4d import plugins, bitmaps # type: ignore
 import os
 PLUGIN_ID = 2242903
 
 class SephiusSpriteSheetToC4D(plugins.CommandData):
     def Execute(self, doc):
         # Coloque aqui o código que seu script deve executar
-        main()
+        main(doc)
         # c4d.gui.MessageDialog("Exportador de Níveis XML Sephius Executado")
         return True
 
@@ -355,7 +355,7 @@ def setColorTagWithData(CContainer):
     CTag_field_container.InsertLayer(FieldColor)
     CTag[c4d.ID_VERTEXCOLOR_FIELDS] = CTag_field_container
 
-def main():
+def main(doc):
     global ScaleRatio
     #Ask the XML to import
     XMLpath = storage.LoadDialog()

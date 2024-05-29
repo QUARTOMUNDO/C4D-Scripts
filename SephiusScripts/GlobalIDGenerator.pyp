@@ -10,7 +10,7 @@ PLUGIN_ID = 2242902
 class GlobalIDGenerator(plugins.CommandData):
     def Execute(self, doc):
         # Coloque aqui o código que seu script deve executar
-        main()
+        main(doc)
         # c4d.gui.MessageDialog("Exportador de Níveis XML Sephius Executado")
         return True
 
@@ -50,7 +50,7 @@ def load_icon():
 if __name__ == "__main__":
     icon = load_icon()
     # Registra o plugin no Cinema 4D
-    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Global ID Generator",
+    c4d.plugins.RegisterCommandPlugin(id=PLUGIN_ID, str="Sephius Global ID Generator",
                                       info=0, icon=icon, help="Generates unique Global IDs for selected objects",
                                       dat=GlobalIDGenerator())
 
@@ -128,12 +128,14 @@ def generate_number(total_digits):
     #final_number = int(timestamp_str + "-" + str(random_number))
     
     return timestamp_str + "-" + str(random_number)
-
-def main():
+    
+def main(doc):
 
     # Called when the tag is executed. It can be called multiple time per frame. Similar to TagData.Execute.
     # Write your code here
+
     selectedObjects = get_selected_objects(doc)
+
     for obj in selectedObjects:
         if HasUserData(obj, "globalID") is False:
             userDataGroup = GetUserData(obj, "GAME PROPERTIES")
