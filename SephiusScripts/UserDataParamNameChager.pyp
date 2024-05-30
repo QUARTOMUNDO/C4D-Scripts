@@ -57,6 +57,14 @@ def update_doc():
     global doc
     doc = c4d.documents.GetActiveDocument()
 
+def get_user_data_tag(obj):
+    # Loop through the tags of the active object to find the User Data tag
+    for tag in obj.GetTags():
+        if tag.GetType() == c4d.Tuserdata:
+            if tag.GetName() == "SETTINGS":
+                return tag
+    return None
+
 def main():
     global doc 
     update_doc()
@@ -81,9 +89,15 @@ def main():
     # Iterate through the selected objects
     for obj in selection:
         print("obj: " + obj.GetName())
-        
+
+        objectTag = get_user_data_tag(obj)    
+
         # Get the User Data container
-        user_data_container = obj.GetUserDataContainer()
+        if objectTag is not None:
+            print("obj: " + obj.GetName(), "has no User Data tag with name SETTINGS")
+            return
+        
+        user_data_container = objectTag.GetUserDataContainer()
 
         # Search for the parameter by name
         for param_id, param_data in user_data_container:
@@ -95,13 +109,13 @@ def main():
                 param_data.SetString(c4d.DESC_NAME, new_parameter_name)
                 
                 # Set the modified description back to the object
-                obj.SetUserDataContainer(param_id, param_data) #Set the container changes  
+                objectTag.SetUserDataContainer(param_id, param_data) #Set the container changes  
                 
                 # Print the object name and parameter name for debugging
-                print(f"Object: {obj.GetName()}, Parameter: {parameter_name}")
+                print(f"Object: {objectTag.GetName()}, Parameter: {parameter_name}")
                 
                 # Print a message after renaming
-                print(f"Renamed {parameter_name} to {new_parameter_name} in {obj.GetName()}")
+                print(f"Renamed {parameter_name} to {new_parameter_name} in {objectTag.GetName()}")
 
     # Update the scene to reflect the changes
     c4d.EventAdd()

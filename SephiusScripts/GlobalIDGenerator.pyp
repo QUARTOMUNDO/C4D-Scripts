@@ -61,6 +61,14 @@ def HasUserData(CObject, UDName):
             return True
     return False
 
+def get_user_data_tag(obj):
+    # Loop through the tags of the active object to find the User Data tag
+    for tag in obj.GetTags():
+        if tag.GetType() == c4d.Tuserdata:
+            if tag.GetName() == "SETTINGS":
+                return tag
+    return None
+
 def createUserData(obj, paramName, dataType, userDataGroup, value):
     #Add UserData storing
     Cbc = c4d.GetCustomDataTypeDefault(dataType) # Create Group
@@ -137,11 +145,13 @@ def main(doc):
     selectedObjects = get_selected_objects(doc)
 
     for obj in selectedObjects:
-        if HasUserData(obj, "globalID") is False:
+        objectTag = get_user_data_tag(obj)
+
+        if HasUserData(objectTag, "globalID") is False:
             userDataGroup = GetUserData(obj, "GAME PROPERTIES")
-            createUserData(obj, "globalID", c4d.DTYPE_STRING, userDataGroup, str(generate_number(10)))
+            createUserData(objectTag, "globalID", c4d.DTYPE_STRING, userDataGroup, str(generate_number(10)))
         else:
-            setUserData(obj, "globalID", str(generate_number(10)))
+            setUserData(objectTag, "globalID", str(generate_number(10)))
 
         print("update Global IDs")
         obj.Message(c4d.MSG_UPDATE)
