@@ -64,13 +64,15 @@ def update_user_data_tag(obj):
 
         # Find the 'SETTINGS' tag
         userDataTag = None
+        userDataTags = []
         for tag in obj.GetTags():
-            if tag.GetName() == "SETTINGS" and tag.GetType() == c4d.Tuserdata:
-                userDataTag = tag
-                break
+            userDataTags.append(tag)
+            #if tag.GetName() == "SETTINGS" and tag.GetType() == c4d.Tuserdata:
+                #userDataTag = tag
+                #break
 
-        if userDataTag is None:
-            print("No SETTINGS tag found for object", obj.GetName())           
+        if len(userDataTags) == 0:
+            print("No USER DATA tag found for object", obj.GetName())           
             return
 
         # Copy user data from the object to the tag, matching by name
@@ -78,29 +80,36 @@ def update_user_data_tag(obj):
             # Get the name of the user data
             name = bc[c4d.DESC_NAME]
             print("name: ", name)
-            # Get the user data value
-            value = obj[id]
-            print("value: ", value)
-            # Find the corresponding parameter in the tag
-            tagUserDataContainer = userDataTag.GetUserDataContainer()
+            print("id: ", id)
+            print("Id[1].dtype: ", id[1].dtype, "dtypes: ",c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER)
 
-            if tagUserDataContainer is None:
-                c4d.gui.MessageDialog("No user data found in 'SETTINGS' tag")
-                return
-            
-            for tagId, tagBc in tagUserDataContainer:
-                print("tagId[1].dtype: ", tagId[1].dtype, "dtypes: ",c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER)
-                if tagId[1].dtype not in [c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER]:
-                    if tagBc[c4d.DESC_NAME] == name and tagId[1].dtype:
-                        # Update the tag user data value
-                        print("Updating the tag user data value: ", name, value)
-                        userDataTag[tagId] = value
-                        break
-                else:
-                    print("User data", name, "is a group or subcontainer.  Ignoring")
-                    continue
+            if id[1].dtype not in [c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER]:
+                # Get the user data value
+                value = obj[id]
+                print("value: ", value)
+                # Find the corresponding parameter in the tag
+                for userDataTag in userDataTags:
+                    tagUserDataContainer = userDataTag.GetUserDataContainer()
 
-            print("User data", name, "don't exist in Settings Tag. Ignoring")
+                    if tagUserDataContainer is None:
+                        #c4d.gui.MessageDialog("No user data found in 'SETTINGS' tag")
+                        return
+                    
+                    for tagId, tagBc in tagUserDataContainer:
+                        print("tagId[1].dtype: ", tagId[1].dtype, "dtypes: ",c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER)
+                        if tagId[1].dtype not in [c4d.DTYPE_GROUP, c4d.DTYPE_SUBCONTAINER]:
+                            if tagBc[c4d.DESC_NAME] == name and tagId[1].dtype:
+                                # Update the tag user data value
+                                print("Updating the tag user data value: ", name, value)
+                                userDataTag[tagId] = value
+                                break
+                        else:
+                            print("User data Target", name, "is a group or subcontainer.  Ignoring")
+                            continue
+            else:
+                print("User data", name, "is a group or subcontainer.  Ignoring")
+                continue
+
 
     
 if __name__ == "__main__":

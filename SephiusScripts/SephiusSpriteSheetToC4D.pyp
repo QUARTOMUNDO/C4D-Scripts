@@ -60,10 +60,6 @@ XMLpath = ""
 PNGpath = ""
 FileName = ""
 folderPath = ""
-AtlasWidth = 0
-AtlasHeight = 0
-AtlasHalfWidth = 0
-AtlasHalfHeight = 0
 TextureSizeRatio = 1
 TextureBiggerSize = 1024
 
@@ -118,13 +114,183 @@ def setPivotDiff(TextureNode):
 
     return pivotDiff
 
-def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, AtlasHeight):
+#Return true if object has a user data name and value is equal to desired
+def HasUserData(CObject, UDName):
+    for id, bc in CObject.GetUserDataContainer():
+        if bc[c4d.DESC_NAME] == UDName:
+            return True
+    return False
 
+#Return true if object has a user data name and value is equal to desired
+def UserDataCheck(CObject, UDName, Value):
+    for id, bc in CObject.GetUserDataContainer():
+        #print(bc[c4d.DESC_NAME], UDName)
+        if bc[c4d.DESC_NAME] == UDName:
+            #print(CObject[id], Value)
+            if CObject[id] == Value:
+                return True
+    return False
+
+def UserDataAndTextureNameCheck(CObject, TexName, UserDataNAme, Value):
+    UserDataCconslusion = False
+    TexNameCconslusion = False
+
+    if UserDataCheck(CObject, UserDataNAme, Value):
+        UserDataCconslusion = True
+
+    if UserDataCheck(CObject, "texture", TexName):
+        TexNameCconslusion = True
+
+    if c4d.InstanceObject == type(CObject):
+        #if have a reference to a sample
+        SampleRef = CObject[c4d.INSTANCEOBJECT_LINK]
+        if SampleRef:
+            if UserDataCheck(CObject[c4d.INSTANCEOBJECT_LINK], "texture", TexName):
+                TexNameCconslusion = True
+
+    #print ("TexNameCconslusion: ", TexNameCconslusion, " TexNameCconslusion: ", UserDataCconslusion)
+    return TexNameCconslusion and UserDataCconslusion
+
+def UserDataAndNameCheck(CObject, OName, UDName, Value):
+    #print(CObject.GetName(), OName, UserDataCheck(CObject, UDName, Value), CObject.GetName().split(".")[0] == OName)
+    #atlasName = GetUserData(CObject, "Atlas")
+
+    #if not CObject.GetUp():
+        #return False
+    #if not atlasName:
+        #return False
+    #if CObject.GetUp().GetName() != CObject[atlasName] + " Samples":
+        #return False
+    #print(UserDataCheck(CObject, UDName, Value), UDName, Value)
+    if not UserDataCheck(CObject, UDName, Value):
+        return False
+    if not CObject.GetName().split(".")[0] == OName:
+        return False
+    return True
+
+#nulls = get_all_objects(doc.GetFirstObject(), lambda x: x.CheckType(c4d.Onull), [])
+def get_all_objects(Container, filter, output):
+    #print("----------------")
+    #print("Get all objects in container: ", Container)
+    #print("----------------")
+    while Container:
+        if filter(Container):
+            output.append(Container)
+            #print("Getting Object: ", Container)
+        if Container.GetDown():
+            get_all_objects(Container.GetDown(), filter, output)
+        Container = Container.GetNext()
+    return output
+
+def getChildrenWithPrefix(parent, childPrefix):
+    PChildren = []
+    nextObject = parent.GetDown()
+
+    if nextObject:
+        if nextObject[c4d.ID_BASELIST_NAME].find(childPrefix) != -1:
+            PChildren.append(nextObject)
+
+    while nextObject:
+        nextObject = nextObject.GetNext()
+        if nextObject:
+            if nextObject[c4d.ID_BASELIST_NAME].find(childPrefix) != -1:
+               PChildren.append(nextObject)
+
+    return PChildren
+
+def hasChild(parent, childName):
+    PChildren = []
+    nextObject = parent.GetDown()
+
+    if nextObject[c4d.ID_BASELIST_NAME] == childName:
+        return True
+
+    while nextObject:
+        nextObject = nextObject.GetNext()
+        if nextObject:
+            if nextObject[c4d.ID_BASELIST_NAME] == childName:
+                return True
+
+    return False
+
+def getChild(parent, childName):
+    if not parent:
+        print("Parent is NONE: ", parent, " childName: ", childName)
+        return None
+     
+    PChildren = []
+    nextObject = parent.GetDown()
+
+    if nextObject:
+        if nextObject[c4d.ID_BASELIST_NAME] == childName:
+            return nextObject
+
+    while nextObject:
+        nextObject = nextObject.GetNext()
+        if nextObject:
+            if nextObject[c4d.ID_BASELIST_NAME] == childName:
+                return nextObject
+
+    return None
+
+#Return true if object has a user data name and value is equal to desired
+def GetUserData(CObject, UDName):
+    for id, bc in CObject.GetUserDataContainer():
+        #print(bc[c4d.DESC_NAME], UDName)
+        if bc[c4d.DESC_NAME] == UDName:
+            return id
+
+    return None
+
+def setColorTagWithData(CContainer):
+    cAlpha = 1
+
+    #CTag = c4d.BaseTag(c4d.Tvertexcolor)
+    #CTag.SetName()
+
+    #CTag.SetPerPointMode(False)
+    #CTag.SetPerPointMode(True)
+    #CTag.SetPerPointMode(False)
+
+    #Enable Color Tag Fields
+    CTag = c4d.VertexColorTag(CContainer.GetPointCount())
+    CTag.__init__(CContainer.GetPointCount())
+    CContainer.InsertTag(CTag)
+
+    CTag[c4d.ID_VERTEXCOLOR_USEFIELDS] = True
+    CTag[c4d.ID_VERTEXCOLOR_ALPHAMODE] = True
+
+    # Create a new solid field layer
+    FieldAlpha = c4d.BaseList2D(c4d.FLsolid)
+    FieldAlpha.SetName("Alpha")
+
+    # Set the color of the solid field to red
+    FieldAlpha[c4d.FIELDLAYER_SOLID_COLOR] = c4d.Vector(1, 1, 1)
+
+    # Set the opacity value
+    FieldAlpha.SetStrength(cAlpha)
+
+    FieldColor = c4d.BaseList2D(c4d.FLcolorize)
+    FieldColor[c4d.FIELDLAYER_COLORIZE_MODE] = 1
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORBASE] = c4d.Vector(1, 1, 1)
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP] = c4d.Vector(1, 1, 1)
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP_MODE] = 1
+    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP_DENSITY] = 1
+    FieldColor[c4d.FIELDLAYER_COLORIZE_CLIP] = True
+    #FieldColorlamp[c4d.FIELDLAYER_CLAMP_MIN_VALUE] = 1
+    FieldColor.SetName("Color")
+
+    # Add a new Field to the tag
+    # Get the Vertex Color Field container
+    CTag_field_container = CTag.GetParameter(c4d.ID_VERTEXCOLOR_FIELDS, 0)
+    CTag_field_container.InsertLayer(FieldAlpha)
+    CTag_field_container.InsertLayer(FieldColor)
+    CTag[c4d.ID_VERTEXCOLOR_FIELDS] = CTag_field_container
+
+def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode):
     #print("Getting Atlas Sizes: ", AtlasWidth, AtlasHeight)
     #AtlasWidth =  float(TextureNode.attrib.get("width")) * ScaleRatio
-    AtlasHalfWidth = AtlasWidth * 0.5
     #AtlasHeight = float(TextureNode.attrib.get("height")) * ScaleRatio
-    AtlasHalfHeight = AtlasHeight * 0.5
 
     CHalfWidth = float(TextureNode.attrib.get("width")) * 0.5
     CHalfHeight = float(TextureNode.attrib.get("height")) * 0.5
@@ -210,153 +376,423 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode, AtlasWidth, At
 
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
 
+def PositionOriginalSample(Sample, node, pivotDiff):
+    global AtlasHalfWidth
+    global AtlasHalfHeight
+
+    #print("pivotDiff: ", pivotDiff, " AtlasHalfWidth: ", AtlasHalfWidth, " AtlasHalfHeight: ", AtlasHalfHeight)
+    #print("pivotDiff: ", pivotDiff, " AtlasWidth: ", AtlasWidth, " AtlasHeight: ", AtlasHeight)
+
+    CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
+    CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
+
+    Sample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
+    Sample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
+    Sample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
+    Sample[c4d.ID_BASEOBJECT_REL_POSITION] = Sample[c4d.ID_BASEOBJECT_REL_POSITION] - (pivotDiff)
     
-#Return true if object has a user data name and value is equal to desired
-def HasUserData(CObject, UDName):
-    for id, bc in CObject.GetUserDataContainer():
-        if bc[c4d.DESC_NAME] == UDName:
-            return True
-    return False
+    rotated = node.attrib.get("rotated")
+    if rotated:
+        Sample[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.pi / 2
+    else:
+        Sample[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = 0
 
-#Return true if object has a user data name and value is equal to desired
-def UserDataCheck(CObject, UDName, Value):
-    for id, bc in CObject.GetUserDataContainer():
-        #print(bc[c4d.DESC_NAME], UDName)
-        if bc[c4d.DESC_NAME] == UDName:
-            #print(CObject[id], Value)
-            if CObject[id] == Value:
-                return True
-    return False
+def PositionOriginalInstance(Instance, node):
+    global SamplesContainer
 
-def UserDataAndNameCheck(CObject, OName, UDName, Value):
-    #print(CObject.GetName(), OName, UserDataCheck(CObject, UDName, Value), CObject.GetName().split(".")[0] == OName)
-    #atlasName = GetUserData(CObject, "Atlas")
+    SampleReference = Instance[c4d.INSTANCEOBJECT_LINK]
+    if not SampleReference:
+        SampleReference = getChild(SamplesContainer, node.attrib.get("name") + "_Sample")
 
-    #if not CObject.GetUp():
-        #return False
-    #if not atlasName:
-        #return False
-    #if CObject.GetUp().GetName() != CObject[atlasName] + " Samples":
-        #return False
-    #print(UserDataCheck(CObject, UDName, Value), UDName, Value)
-    if not UserDataCheck(CObject, UDName, Value):
-        return False
-    if not CObject.GetName().split(".")[0] == OName:
-        return False
-    return True
+    print("Positioing Instance Ref Name: ", node.attrib.get("name") + "_Sample", " SampleReference: ", SampleReference)
+   
+    #print("Instance Ref Object Name: ", SampleReference.GetName())
+    if not SampleReference:
+        print("Setting Instance Position but Sample Reference not found: ", node.attrib.get("name") + "_Sample")
+        return
+    
+    Instance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = SampleReference[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X]
+    Instance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = SampleReference[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y]
+    Instance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = SampleReference[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z]
+    Instance[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = SampleReference[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]
+    print("Instance Position Set", Instance[c4d.ID_BASEOBJECT_REL_POSITION], SampleReference[c4d.ID_BASEOBJECT_REL_POSITION])
 
-#nulls = get_all_objects(doc.GetFirstObject(), lambda x: x.CheckType(c4d.Onull), [])
-def get_all_objects(op, filter, output):
-    while op:
-        if filter(op):
-            output.append(op)
-        get_all_objects(op.GetDown(), filter, output)
-        op = op.GetNext()
-    return output
+def UpdateExistingSample(ExistingSample, node, pivotDiff, AtlasMaterial, isOriginalInstance):
+    MVCTag = ExistingSample.GetTag(c4d.Tvertexmap)
+    CTag = ExistingSample.GetTag(c4d.Ttexture)
+    CTag.SetMaterial(AtlasMaterial)
+    ExistingSample.InsertTag(CTag, MVCTag)
 
-def getChildrenWithPrefix(parent, childPrefix):
-    PChildren = []
-    nextObject = parent.GetDown()
+    if isOriginalInstance:
+        #Is is a original sample inside SamplesContainer
+        #print("Original Sample")
+        PositionOriginalSample(ExistingSample, node, pivotDiff)
 
-    if nextObject:
-        if nextObject[c4d.ID_BASELIST_NAME].find(childPrefix) != -1:
-            PChildren.append(nextObject)
+    UVWTag = ExistingSample.GetTag(c4d.Tuvw)
+    VertexCoord = UVWTag.GetSlow(0)
+    for i in range(4):
+        element = GetUserData(ExistingSample, "Vertex " + str(i) + " Position")
+        ExistingSample[element] = ExistingSample.GetPoint(i)
 
-    while nextObject:
-        nextObject = nextObject.GetNext()
-        if nextObject:
-            if nextObject[c4d.ID_BASELIST_NAME].find(childPrefix) != -1:
-               PChildren.append(nextObject)
+        element = GetUserData(ExistingSample, "Vertex " + str(i) + " UVW")
+        if i == 0:
+            ExistingSample[element] = VertexCoord["a"]
+        elif  i == 1:
+            ExistingSample[element] = VertexCoord["b"]
+        elif  i == 2:
+            ExistingSample[element] = VertexCoord["c"]
+        else:
+            ExistingSample[element] = VertexCoord["d"]
 
-    return PChildren
+    element = GetUserData(ExistingSample, "Offset")
+    ExistingSample[element] = pivotDiff
 
-def hasChild(parent, childName):
-    PChildren = []
-    nextObject = parent.GetDown()
+    element = GetUserData(ExistingSample, "Texture Width")
+    ExistingSample[element] = float(node.attrib.get("width")) * ScaleRatio
 
-    if nextObject[c4d.ID_BASELIST_NAME] == childName:
-        return True
+    element = GetUserData(ExistingSample, "Texture Height")
+    ExistingSample[element] = float(node.attrib.get("height")) * ScaleRatio
 
-    while nextObject:
-        nextObject = nextObject.GetNext()
-        if nextObject:
-            if nextObject[c4d.ID_BASELIST_NAME] == childName:
-                return True
+    element = GetUserData(ExistingSample, "Texture Frame X")
+    if(node.attrib.get("frameX")):
+        ExistingSample[element] = float(node.attrib.get("frameX")) * ScaleRatio
+    else:
+        ExistingSample[element] = 0
 
-    return False
+    element = GetUserData(ExistingSample, "Texture Frame Y")
+    if(node.attrib.get("frameY")):
+        ExistingSample[element] = float(node.attrib.get("frameY")) * ScaleRatio
+    else:
+        ExistingSample[element] = 0
 
-def getChild(parent, childName):
-    PChildren = []
-    nextObject = parent.GetDown()
+    element = GetUserData(ExistingSample, "Texture Frame Width")
+    if(node.attrib.get("frameWidth")):
+        ExistingSample[element] = float(node.attrib.get("frameWidth")) * ScaleRatio
+    else:
+        ExistingSample[element] = float(node.attrib.get("width")) * ScaleRatio
 
-    if nextObject:
-        if nextObject[c4d.ID_BASELIST_NAME] == childName:
-            return nextObject
+    element = GetUserData(ExistingSample, "Texture Frame Height")
+    if(node.attrib.get("frameHeight")):
+        ExistingSample[element] = float(node.attrib.get("frameHeight")) * ScaleRatio
+    else:
+        ExistingSample[element] = float(node.attrib.get("height")) * ScaleRatio
 
-    while nextObject:
-        nextObject = nextObject.GetNext()
-        if nextObject:
-            if nextObject[c4d.ID_BASELIST_NAME] == childName:
-                return nextObject
+    #Fix sample position if pivot has changes so sample continue in same position visually speaking
+    #ExistingSample[c4d.ID_BASEOBJECT_REL_POSITION] = ExistingSample[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
 
-    return None
+def UpdateExistingInstance(ExistingInstance, node, isOriginalInstance):
+    global SamplesContainer
 
-#Return true if object has a user data name and value is equal to desired
-def GetUserData(CObject, UDName):
-    for id, bc in CObject.GetUserDataContainer():
-        #print(bc[c4d.DESC_NAME], UDName)
-        if bc[c4d.DESC_NAME] == UDName:
-            return id
+    SampleReference = ExistingInstance[c4d.INSTANCEOBJECT_LINK]
+    if not SampleReference:
+        SampleReference = getChild(SamplesContainer, node.attrib.get("name") + "_Sample")
 
-    return None
+    print("Existing Instance Ref Name: ", node.attrib.get("name") + "_Sample", SampleReference)
 
-def setColorTagWithData(CContainer):
-    cAlpha = 1
+    #If is a original instance inside InstancesContainer, then update it's transform
+    if isOriginalInstance:
+        #print("Original Instance: ", ExistingInstance.GetName())
+        PositionOriginalInstance(ExistingInstance, node)
+    
+    #Update the Instance Object to use new Sample Object
+    ExistingInstance[c4d.INSTANCEOBJECT_LINK] = SampleReference
 
-    #CTag = c4d.BaseTag(c4d.Tvertexcolor)
-    #CTag.SetName()
+    #Update Instance Object's User Data to Point to the New Sample Object
+    GetUserData(ExistingInstance, "Sample Reference")
+    element = GetUserData(ExistingInstance, "Sample Reference")
+    if element:
+        ExistingInstance[element] = SampleReference
+    else:
+        CreateNewInstanceData(ExistingInstance, node, isOriginalInstance)
 
-    #CTag.SetPerPointMode(False)
-    #CTag.SetPerPointMode(True)
-    #CTag.SetPerPointMode(False)
+def CreateNewSampleData(NewSample, node, currentName, pivotDiff, AtlasMaterial):
+    PositionOriginalSample(NewSample, node, pivotDiff)
+    
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
+    bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_DEFAULT] = True
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_COLUMNS] = 1
+    ObjectExportGroup = NewSample.AddUserData(bc)
+    #NewSample[ObjectExportGroup] = "OBJECT EXPORT INFO"
 
-    #Enable Color Tag Fields
-    CTag = c4d.VertexColorTag(CContainer.GetPointCount())
-    CTag.__init__(CContainer.GetPointCount())
-    CContainer.InsertTag(CTag)
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "GAME PROPERTIES"
+    bc[c4d.DESC_SHORT_NAME] = "GAME PROPERTIES"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_DEFAULT] = True
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_COLUMNS] = 1
+    GamePropertiesGroup = NewSample.AddUserData(bc)
+    #NewSample[GamePropertiesGroup] = "GAME PROPERTIES"
 
-    CTag[c4d.ID_VERTEXCOLOR_USEFIELDS] = True
-    CTag[c4d.ID_VERTEXCOLOR_ALPHAMODE] = True
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
+    bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
+    bc[c4d.DESC_SHORT_NAME] = "IsSpriteSheetSample"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = True
 
-    # Create a new solid field layer
-    FieldAlpha = c4d.BaseList2D(c4d.FLsolid)
-    FieldAlpha.SetName("Alpha")
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
+    bc[c4d.DESC_NAME] = "Sample Reference"
+    bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = NewSample
 
-    # Set the color of the solid field to red
-    FieldAlpha[c4d.FIELDLAYER_SOLID_COLOR] = c4d.Vector(1, 1, 1)
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+    bc[c4d.DESC_NAME] = "className"
+    bc[c4d.DESC_SHORT_NAME] = "className"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = "Image"
 
-    # Set the opacity value
-    FieldAlpha.SetStrength(cAlpha)
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+    bc[c4d.DESC_NAME] = "texture"
+    bc[c4d.DESC_SHORT_NAME] = "texture"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = currentName
 
-    FieldColor = c4d.BaseList2D(c4d.FLcolorize)
-    FieldColor[c4d.FIELDLAYER_COLORIZE_MODE] = 1
-    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORBASE] = c4d.Vector(1, 1, 1)
-    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP] = c4d.Vector(1, 1, 1)
-    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP_MODE] = 1
-    FieldColor[c4d.FIELDLAYER_COLORIZE_COLORTOP_DENSITY] = 1
-    FieldColor[c4d.FIELDLAYER_COLORIZE_CLIP] = True
-    #FieldColorlamp[c4d.FIELDLAYER_CLAMP_MIN_VALUE] = 1
-    FieldColor.SetName("Color")
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+    bc[c4d.DESC_NAME] = "Atlas"
+    bc[c4d.DESC_SHORT_NAME] = "Atlas"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = FileName
 
-    # Add a new Field to the tag
-    # Get the Vertex Color Field container
-    CTag_field_container = CTag.GetParameter(c4d.ID_VERTEXCOLOR_FIELDS, 0)
-    CTag_field_container.InsertLayer(FieldAlpha)
-    CTag_field_container.InsertLayer(FieldColor)
-    CTag[c4d.ID_VERTEXCOLOR_FIELDS] = CTag_field_container
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
+    bc[c4d.DESC_NAME] = "blendMode"
+    bc[c4d.DESC_SHORT_NAME] = "blendMode"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = "normal"
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "Vertex Position"
+    bc[c4d.DESC_SHORT_NAME] = "Vertex Position"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_COLUMNS] = 1
+    #bc[c4d.DESC_PARENTGROUP] = C2element
+    VertexPositionGroup = NewSample.AddUserData(bc)
+
+    pcount = NewSample.GetPointCount()
+    point = NewSample.GetAllPoints()
+    for i in range(pcount):
+        bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
+        bc[c4d.DESC_NAME] = "Vertex " + str(i) + " Position"
+        bc[c4d.DESC_SHORT_NAME] = "Vertex " + str(i) + " Position"
+        bc[c4d.DESC_EDITABLE] = False
+        bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        bc[c4d.DESC_PARENTGROUP] = VertexPositionGroup
+        element = NewSample.AddUserData(bc)
+        NewSample[element] = NewSample.GetPoint(i)
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
+    bc[c4d.DESC_NAME] = "Offset"
+    bc[c4d.DESC_SHORT_NAME] = "Offset"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_PARENTGROUP] = VertexPositionGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = pivotDiff
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "Vertex UVW"
+    bc[c4d.DESC_SHORT_NAME] = "Vertex UVW"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_COLUMNS] = 1
+    #bc[c4d.DESC_PARENTGROUP] = C2element
+    VertexUVWGroup = NewSample.AddUserData(bc)
+
+    UVWTag = NewSample.GetTag(c4d.Tuvw)
+    VertexCoord = UVWTag.GetSlow(0)
+    for i in range(4):
+        bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
+        bc[c4d.DESC_NAME] = "Vertex " + str(i) + " UVW"
+        bc[c4d.DESC_SHORT_NAME] = "Vertex " + str(i) + " UVW"
+        bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+        bc[c4d.DESC_PARENTGROUP] = VertexUVWGroup
+        element = NewSample.AddUserData(bc)
+
+        if i == 0:
+            NewSample[element] = VertexCoord["a"]
+        elif  i == 1:
+            NewSample[element] = VertexCoord["b"]
+        elif  i == 2:
+            NewSample[element] = VertexCoord["c"]
+        else:
+            NewSample[element] = VertexCoord["d"]
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "Texture Size"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Size"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_COLUMNS] = 2
+    #bc[c4d.DESC_PARENTGROUP] = C2element
+    TexSizeGroup = NewSample.AddUserData(bc)
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    bc[c4d.DESC_NAME] = "Texture Width"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Width"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = TexSizeGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = float(node.attrib.get("width")) * ScaleRatio
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    bc[c4d.DESC_NAME] = "Texture Height"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Height"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = TexSizeGroup
+    element = NewSample.AddUserData(bc)
+    NewSample[element] = float(node.attrib.get("height")) * ScaleRatio
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "Texture Frame"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Frame"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_COLUMNS] = 4
+    #bc[c4d.DESC_PARENTGROUP] = C2element
+    TexFrameGroup = NewSample.AddUserData(bc)
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    bc[c4d.DESC_NAME] = "Texture Frame X"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Frame X"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
+    element = NewSample.AddUserData(bc)
+    if(node.attrib.get("frameX")):
+        NewSample[element] = float(node.attrib.get("frameX")) * ScaleRatio
+    else:
+        NewSample[element] = 0
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    bc[c4d.DESC_NAME] = "Texture Frame Y"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Frame Y"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
+    element = NewSample.AddUserData(bc)
+    if(node.attrib.get("frameY")):
+        NewSample[element] = float(node.attrib.get("frameY")) * ScaleRatio
+    else:
+        NewSample[element] = 0
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    bc[c4d.DESC_NAME] = "Texture Frame Width"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Frame Width"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
+    element = NewSample.AddUserData(bc)
+    if(node.attrib.get("frameY")):
+        NewSample[element] = float(node.attrib.get("frameWidth")) * ScaleRatio
+    else:
+        NewSample[element] = float(node.attrib.get("width")) * ScaleRatio
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
+    bc[c4d.DESC_NAME] = "Texture Frame Height"
+    bc[c4d.DESC_SHORT_NAME] = "Texture Frame Height"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
+    element = NewSample.AddUserData(bc)
+    if(node.attrib.get("frameY")):
+        NewSample[element] = float(node.attrib.get("frameHeight")) * ScaleRatio
+    else:
+        NewSample[element] = float(node.attrib.get("height")) * ScaleRatio
+
+    setColorTagWithData(NewSample)
+
+    c4d.EventAdd()
+
+    CTag = NewSample.MakeTag(c4d.Ttexture)
+    CTag[c4d.TEXTURETAG_PROJECTION] = 6
+    CTag.SetMaterial(AtlasMaterial)
+
+    MVCTag = NewSample.GetTag(c4d.Tvertexmap)
+
+    NewSample.InsertTag(CTag, MVCTag)
+
+def CreateNewInstanceData(NewInstance, node, isOriginalInstance):
+    SampleReference = getChild(SamplesContainer, node.attrib.get("name") + "_Sample")
+
+    if not SampleReference:
+        print("Sample Reference not found: ", node.attrib.get("name") + "_Sample")
+        return
+
+    NewInstance[c4d.INSTANCEOBJECT_LINK] = SampleReference
+
+    if isOriginalInstance:
+        PositionOriginalInstance(NewInstance, node)
+   
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
+    bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
+    bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_DEFAULT] = True
+    bc[c4d.DESC_TITLEBAR] = True
+    bc[c4d.DESC_COLUMNS] = 1
+    ObjectExportGroup = NewInstance.AddUserData(bc)
+
+    #print("Instance", ObjectExportGroup)
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
+    bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
+    bc[c4d.DESC_SHORT_NAME] = "IsSpriteSheetSample"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
+    element = NewInstance.AddUserData(bc)
+    NewInstance[element] = True
+
+    bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
+    bc[c4d.DESC_NAME] = "Sample Reference"
+    bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
+    bc[c4d.DESC_EDITABLE] = False
+    bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
+    bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
+    element = NewInstance.AddUserData(bc)
+    NewInstance[element] = SampleReference
+
+InstancesContainer = None
+SamplesContainer = None
+AtlasHalfWidth = 0
+AtlasHalfHeight = 0
+AtlasWidth = 0
+AtlasHeight = 0
 
 def main(doc):
     global ScaleRatio
+    global SamplesContainer
+    global InstancesContainer
+    global AtlasHalfWidth
+    global AtlasHeight
+    global AtlasWidth
+    global AtlasHalfHeight
+
     #Ask the XML to import
     XMLpath = storage.LoadDialog()
     #See if is a XML file
@@ -403,7 +839,7 @@ def main(doc):
         AtlasHeight = float(node.attrib.get("height")) * ScaleRatio
         AtlasHalfHeight = AtlasHeight * 0.5
         PNGpath = folderPath + node.attrib.get("imagePath")
-        #print("Setting Atlas Sizes: ", AtlasWidth, AtlasHeight)
+        print("Setting Atlas Sizes: ", AtlasWidth, AtlasHeight, AtlasHalfWidth, AtlasHalfHeight)
 
         if AtlasWidth >= AtlasHeight:
             TextureBiggerSize = AtlasHeight
@@ -495,9 +931,11 @@ def main(doc):
 
     InstancesContainer[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = AtlasHalfWidth * 2 + 200
 
+    SceneContainer = doc.SearchObject("LANDS OF OBLIVION")
+
     # Verify if Material already Exist
     AtlasMaterial = doc.SearchMaterial(FileName + " Material")
-    print(AtlasMaterial)
+    #print(AtlasMaterial)
     if not AtlasMaterial:
         # create material
         AtlasMaterial = c4d.BaseMaterial(c4d.Mmaterial)
@@ -554,482 +992,167 @@ def main(doc):
         doc.InsertMaterial(MissingMaterial)
 
     #print("Sample List USer Data: ", SamplesContainer[c4d.ID_USERDATA,4])
-    AtlasSamplesList = (SamplesContainer[c4d.ID_USERDATA,4]).split(",\n")
+    #Temporary Store Sample Container Samples List
+    AtlasSamplesList = (SamplesContainer[c4d.ID_USERDATA,4]).split("_Sample,\n")
+    if len(AtlasSamplesList) == 0:
+        AtlasSamplesList = (SamplesContainer[c4d.ID_USERDATA,4]).split(",\n")
+        
+    #Remove empty last element
     AtlasSamplesList.pop()
     #print("Sample List: ", AtlasSamplesList)
+
+    #Clear the Sample Container Sample List to make a new one
     SamplesContainer[c4d.ID_USERDATA,4] = ""
 
     #Create the Samples
     for node in tree.iter("SubTexture"):
-        currenName = node.attrib.get("name")
+        currentName = node.attrib.get("name")
         rotated = node.attrib.get("rotated")
         
-        print(currenName, len(currenName.split("_")))
+        print(currentName, " Name Parts:", len(currentName.split("_")))
 
-        #if len(currenName.split("_")) > 2:
-            #return gui.MessageDialog("Sub textues (samples) name patern is wrong. Should be like 'Atlas_TexName', have just one '_' divisor. This sample " + currenName + " have more.")
+        if len(currentName.split("_")) > 2:
+           print("Sub textues (samples) name patern maybe is wrong. Should be like 'Atlas_TexName', have just one '_' divisor. This sample " + currentName + " have more. It's an animation?")
 
-        CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
-        CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
-
+        #Find the difference between the original sample pivot and the updated sample pivot
         pivotDiff = setPivotDiff(node)
 
-        Csample = False
-
-        hasExistingSamples = False
-        #Updating Actual Samples:...
-        for Csample in get_all_objects(doc.GetFirstObject(), lambda x:UserDataAndNameCheck(x, currenName + "_Sample", "IsSpriteSheetSample", True), []):
-            if not Csample.GetUp():
-                hasExistingSamples = False
-            elif Csample.GetUp().GetName() == FileName + " Samples":
-                hasExistingSamples = True
-
-            #see if is a polygon object, if not should not update as existing sample
-            isPolygonObject = c4d.PolygonObject == type(Csample)
-
-            #print("hasExistingSamples: ", hasExistingSamples, currenName, Csample.GetName())
-
-            SParent = Csample.GetUp()
-
-            XTag = None
-            for XTag in Csample.GetTags():
-               if XTag[c4d.ID_BASELIST_NAME] == "SampleUVW":
-                   CTag = XTag
-
-            if (isPolygonObject):
-                SetPolygon(FileName + " Samples", Csample, CTag, Csample.GetPolygon(0), node, AtlasWidth, AtlasHeight)
-
-                MVCTag = Csample.GetTag(c4d.Tvertexmap)
-                CTag = Csample.GetTag(c4d.Ttexture)
-                CTag.SetMaterial(AtlasMaterial)
-                Csample.InsertTag(CTag, MVCTag)
-
-                #oldPivotDiff = Csample[c4d.ID_USERDATA,2]
-                #print("oldPivotDiff", Csample, oldPivotDiff)
-                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] + 0
-
-                if SParent == SamplesContainer:
-                    Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
-                    Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
-                    Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-                    Csample.InsertUnder(SamplesContainer)
-
-                    UVWTag = Csample.GetTag(c4d.Tuvw)
-                    VertexCoord = UVWTag.GetSlow(0)
-                    for i in range(4):
-                        element = GetUserData(Csample, "Vertex " + str(i) + " Position")
-                        Csample[element] = Csample.GetPoint(i)
-
-                        element = GetUserData(Csample, "Vertex " + str(i) + " UVW")
-                        if i == 0:
-                            Csample[element] = VertexCoord["a"]
-                        elif  i == 1:
-                            Csample[element] = VertexCoord["b"]
-                        elif  i == 2:
-                            Csample[element] = VertexCoord["c"]
-                        else:
-                            Csample[element] = VertexCoord["d"]
-
-                    element = GetUserData(Csample, "Offset")
-                    Csample[element] = pivotDiff
-
-                    element = GetUserData(Csample, "Texture Width")
-                    Csample[element] = float(node.attrib.get("width")) * ScaleRatio
-
-                    element = GetUserData(Csample, "Texture Height")
-                    Csample[element] = float(node.attrib.get("height")) * ScaleRatio
-
-                    element = GetUserData(Csample, "Texture Frame X")
-                    if(node.attrib.get("frameX")):
-                        Csample[element] = float(node.attrib.get("frameX")) * ScaleRatio
-                    else:
-                        Csample[element] = 0
-
-                    element = GetUserData(Csample, "Texture Frame Y")
-                    if(node.attrib.get("frameY")):
-                        Csample[element] = float(node.attrib.get("frameY")) * ScaleRatio
-                    else:
-                        Csample[element] = 0
-
-                    element = GetUserData(Csample, "Texture Frame Width")
-                    if(node.attrib.get("frameWidth")):
-                        Csample[element] = float(node.attrib.get("frameWidth")) * ScaleRatio
-                    else:
-                        Csample[element] = float(node.attrib.get("width")) * ScaleRatio
-
-                    element = GetUserData(Csample, "Texture Frame Height")
-                    if(node.attrib.get("frameHeight")):
-                        Csample[element] = float(node.attrib.get("frameHeight")) * ScaleRatio
-                    else:
-                        Csample[element] = float(node.attrib.get("height")) * ScaleRatio
-
-                Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
-
-        #Create and set object parameters
-        CInstance = getChild(InstancesContainer, currenName + "_Instance")
-
-        #Verify if sample is on sample list
-        if (currenName + "_Sample") in AtlasSamplesList:
+        #Verify if current sample data is on current sample list in the scene
+        if (currentName) in AtlasSamplesList:
             #print("Sample is listed")
-            SampleListIndex = AtlasSamplesList.index(currenName + "_Sample")
+            SampleListIndex = AtlasSamplesList.index(currentName)
+            #Remove the sample from the this temporary list as they are being processed
             AtlasSamplesList.pop(SampleListIndex)
 
-        SamplesContainer[c4d.ID_USERDATA,4] = SamplesContainer[c4d.ID_USERDATA,4] + currenName + "_Sample,\n"
+        #Add sample to the Sample Container Samples List
+        SamplesContainer[c4d.ID_USERDATA,4] = SamplesContainer[c4d.ID_USERDATA,4] + currentName + ",\n"
 
-        if not hasExistingSamples:
-            #print("Don´t have Existing Samples: ", hasExistingSamples, currenName)
-            #Create a quad polygon by creating a plane then set it as editable
-            #QuadPolygon = c4d.BaseObject(c4d.Oplane)
-            #QuadPolygon[c4d.PRIM_PLANE_SUBW] = 1
-            #QuadPolygon[c4d.PRIM_PLANE_SUBH] = 1
-            #QuadPolygon[c4d.PRIM_AXIS] = c4d.PRIM_AXIS_ZN
+        Csample = None
+        sampleAlradyExist = False
 
-            #Csample = c4d.utils.SendModelingCommand(command = c4d.MCOMMAND_MAKEEDITABLE, list = [QuadPolygon], mode = c4d.MODELINGCOMMANDMODE_ALL, bc = c4d.BaseContainer(), doc = doc)[0]
-            #Csample.Message(c4d.MSG_UPDATE)
+        #print("----------------------------Updating ExistingSample -------")
+        ExistingSample = getChild(SamplesContainer, currentName + "_Sample")
+
+        #Updating Actual Samples in SampleContainer
+        if(ExistingSample):
+            print("Updating Existing Sample: ", currentName)
+
+            sampleAlradyExist = True
+            
+            #see if is a polygon object, if not should not update
+            isPolygonObject = c4d.PolygonObject == type(ExistingSample)
+
+            if isPolygonObject:
+                XTag = None
+                for XTag in ExistingSample.GetTags():
+                    if XTag[c4d.ID_BASELIST_NAME] == "SampleUVW":
+                        CTag = XTag
+
+                SetPolygon(FileName + " Samples", ExistingSample, CTag, ExistingSample.GetPolygon(0), node)
+                UpdateExistingSample(ExistingSample, node, pivotDiff, AtlasMaterial, True)
+            #Create undo for this operation
+            doc.AddUndo(c4d.UNDOTYPE_NEW, ExistingSample)
+        
+        #print("----------------------------------Finished ExistingSample-------")     
+        #print("----------------------------Creating New Samples-------")
+        #Create a new sample if not exist
+        if not sampleAlradyExist:
+            print("Sample is completly new: ", sampleAlradyExist, currentName)
 
             Csample = c4d.BaseObject(c4d.Opolygon)
-
-            # If the editable object exists, insert it into the document
-            #QuadPolygon.Remove()
-
-            Csample.SetName(currenName + "_Sample")
-
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-            #print(pivotDiff)
-            Csample[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION] - (pivotDiff * 1)
-
+            Csample.SetName(currentName + "_Sample")
             Csample.InsertUnder(SamplesContainer)
 
-            SetPolygon(FileName + " Samples", Csample, None, None, node, AtlasWidth, AtlasHeight)
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
-            bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_DEFAULT] = True
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_COLUMNS] = 1
-            ObjectExportGroup = Csample.AddUserData(bc)
-            #Csample[ObjectExportGroup] = "OBJECT EXPORT INFO"
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "GAME PROPERTIES"
-            bc[c4d.DESC_SHORT_NAME] = "GAME PROPERTIES"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_DEFAULT] = True
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_COLUMNS] = 1
-            GamePropertiesGroup = Csample.AddUserData(bc)
-            #Csample[GamePropertiesGroup] = "GAME PROPERTIES"
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
-            bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
-            bc[c4d.DESC_SHORT_NAME] = "IsSpriteSheetSample"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = True
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
-            bc[c4d.DESC_NAME] = "Sample Reference"
-            bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = Csample
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "className"
-            bc[c4d.DESC_SHORT_NAME] = "className"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = "Image"
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "texture"
-            bc[c4d.DESC_SHORT_NAME] = "texture"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = currenName
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "Atlas"
-            bc[c4d.DESC_SHORT_NAME] = "Atlas"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = FileName
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
-            bc[c4d.DESC_NAME] = "blendMode"
-            bc[c4d.DESC_SHORT_NAME] = "blendMode"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = "normal"
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "Vertex Position"
-            bc[c4d.DESC_SHORT_NAME] = "Vertex Position"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_COLUMNS] = 1
-            #bc[c4d.DESC_PARENTGROUP] = C2element
-            VertexPositionGroup = Csample.AddUserData(bc)
-
-            pcount = Csample.GetPointCount()
-            point = Csample.GetAllPoints()
-            for i in range(pcount):
-                bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
-                bc[c4d.DESC_NAME] = "Vertex " + str(i) + " Position"
-                bc[c4d.DESC_SHORT_NAME] = "Vertex " + str(i) + " Position"
-                bc[c4d.DESC_EDITABLE] = False
-                bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-                bc[c4d.DESC_PARENTGROUP] = VertexPositionGroup
-                element = Csample.AddUserData(bc)
-                Csample[element] = Csample.GetPoint(i)
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
-            bc[c4d.DESC_NAME] = "Offset"
-            bc[c4d.DESC_SHORT_NAME] = "Offset"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_PARENTGROUP] = VertexPositionGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = pivotDiff
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "Vertex UVW"
-            bc[c4d.DESC_SHORT_NAME] = "Vertex UVW"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_COLUMNS] = 1
-            #bc[c4d.DESC_PARENTGROUP] = C2element
-            VertexUVWGroup = Csample.AddUserData(bc)
-
-            UVWTag = Csample.GetTag(c4d.Tuvw)
-            VertexCoord = UVWTag.GetSlow(0)
-            for i in range(4):
-                bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_VECTOR)
-                bc[c4d.DESC_NAME] = "Vertex " + str(i) + " UVW"
-                bc[c4d.DESC_SHORT_NAME] = "Vertex " + str(i) + " UVW"
-                bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-                bc[c4d.DESC_PARENTGROUP] = VertexUVWGroup
-                element = Csample.AddUserData(bc)
-
-                if i == 0:
-                    Csample[element] = VertexCoord["a"]
-                elif  i == 1:
-                    Csample[element] = VertexCoord["b"]
-                elif  i == 2:
-                    Csample[element] = VertexCoord["c"]
-                else:
-                    Csample[element] = VertexCoord["d"]
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "Texture Size"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Size"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_COLUMNS] = 2
-            #bc[c4d.DESC_PARENTGROUP] = C2element
-            TexSizeGroup = Csample.AddUserData(bc)
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-            bc[c4d.DESC_NAME] = "Texture Width"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Width"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = TexSizeGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = float(node.attrib.get("width")) * ScaleRatio
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-            bc[c4d.DESC_NAME] = "Texture Height"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Height"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = TexSizeGroup
-            element = Csample.AddUserData(bc)
-            Csample[element] = float(node.attrib.get("height")) * ScaleRatio
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "Texture Frame"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Frame"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_COLUMNS] = 4
-            #bc[c4d.DESC_PARENTGROUP] = C2element
-            TexFrameGroup = Csample.AddUserData(bc)
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-            bc[c4d.DESC_NAME] = "Texture Frame X"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Frame X"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
-            element = Csample.AddUserData(bc)
-            if(node.attrib.get("frameX")):
-                Csample[element] = float(node.attrib.get("frameX")) * ScaleRatio
-            else:
-                Csample[element] = 0
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-            bc[c4d.DESC_NAME] = "Texture Frame Y"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Frame Y"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
-            element = Csample.AddUserData(bc)
-            if(node.attrib.get("frameY")):
-                Csample[element] = float(node.attrib.get("frameY")) * ScaleRatio
-            else:
-                Csample[element] = 0
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-            bc[c4d.DESC_NAME] = "Texture Frame Width"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Frame Width"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
-            element = Csample.AddUserData(bc)
-            if(node.attrib.get("frameY")):
-                Csample[element] = float(node.attrib.get("frameWidth")) * ScaleRatio
-            else:
-                Csample[element] = float(node.attrib.get("width")) * ScaleRatio
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_REAL)
-            bc[c4d.DESC_NAME] = "Texture Frame Height"
-            bc[c4d.DESC_SHORT_NAME] = "Texture Frame Height"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = TexFrameGroup
-            element = Csample.AddUserData(bc)
-            if(node.attrib.get("frameY")):
-                Csample[element] = float(node.attrib.get("frameHeight")) * ScaleRatio
-            else:
-                Csample[element] = float(node.attrib.get("height")) * ScaleRatio
-
-            setColorTagWithData(Csample)
-
-            #MVCTag = c4d.VertexColorTag(4)
-            #MVCTag.__init__(4)
-            #Csample.InsertTag(MVCTag)
-            #VCdata = MVCTag.GetDataAddressW()
-            #white = c4d.Vector(1.0, 1.0, 1.0)
-
-            #pointCount = Csample.GetPointCount()
-            #for idx in range(pointCount):
-              #MVCTag.SetColor(VCdata, None, None, idx, white)
-              #MVCTag.SetAlpha(VCdata, None, None, idx, 1)
-
-            c4d.EventAdd()
-
-            #MVCTag.SetPerPointMode(False)
-
-            CTag = Csample.MakeTag(c4d.Ttexture)
-            CTag[c4d.TEXTURETAG_PROJECTION] = 6
-            CTag.SetMaterial(AtlasMaterial)
-            Csample.InsertTag(CTag, MVCTag)
-
-            if not MVCTag:
-                MVCTag = Csample.GetTag(c4d.Tvertexmap)
-
-            CHalfWidth = float(node.attrib.get("width")) * 0.5 * ScaleRatio
-            CHalfHeight = float(node.attrib.get("height")) * 0.5 * ScaleRatio
-
-            CInstance = c4d.BaseObject(c4d.Oinstance)
-            CInstance.SetName(currenName + "_Instance")
-            CInstance[c4d.INSTANCEOBJECT_LINK] = Csample
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
-            CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
+            SetPolygon(FileName + " Samples", Csample, None, None, node)
+            CreateNewSampleData(Csample, node, currentName, pivotDiff, AtlasMaterial)
             
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
-            bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
-            bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_DEFAULT] = True
-            bc[c4d.DESC_TITLEBAR] = True
-            bc[c4d.DESC_COLUMNS] = 1
-            ObjectExportGroup = CInstance.AddUserData(bc)
-            #CInstance[ObjectExportGroup] = "OBJECT EXPORT INFO"
-
-            print("Instance", ObjectExportGroup)
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
-            bc[c4d.DESC_NAME] = "IsSpriteSheetSample"
-            bc[c4d.DESC_SHORT_NAME] = "IsSpriteSheetSample"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
-            element = CInstance.AddUserData(bc)
-            CInstance[element] = True
-
-            bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BASELISTLINK)
-            bc[c4d.DESC_NAME] = "Sample Reference"
-            bc[c4d.DESC_SHORT_NAME] = "Sample Reference"
-            bc[c4d.DESC_EDITABLE] = False
-            bc[c4d.DESC_ANIMATE] = c4d.DESC_ANIMATE_OFF
-            bc[c4d.DESC_PARENTGROUP] = ObjectExportGroup
-            element = CInstance.AddUserData(bc)
-            CInstance[element] = Csample
-
-            rotated = node.attrib.get("rotated") == "true"            
-            if rotated:
-                #re-rotate the object
-                CInstance[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.pi / 2
-        
-            CInstance.InsertUnder(InstancesContainer)
-
             #Refresh the managers to show the new object
             c4d.EventAdd()
-
-            #Fix sample pivot to match the original sample. If SubTexture have no frame info, it was not trimed so there is no need to adjust pivot.
-            if bool(node.attrib.get("frameX")):
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = Csample[c4d.ID_BASEOBJECT_REL_POSITION]
 
             #Create undo for this operation
             doc.AddUndo(c4d.UNDOTYPE_NEW, Csample)
             #print(node.tag, currenName, Csample2)
-        else:
-            if CInstance and CInstance.GetUp() == InstancesContainer:
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_X] = float(node.attrib.get("x")) * ScaleRatio - AtlasHalfWidth + CHalfWidth
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Y] = -float(node.attrib.get("y")) * ScaleRatio + AtlasHalfHeight - CHalfHeight
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION,c4d.VECTOR_Z] = 0
-                CInstance[c4d.ID_BASEOBJECT_REL_POSITION] = CInstance[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
+        #print("----------------------------------Creating New Samples-------")
 
-            doc.AddUndo(c4d.UNDOTYPE_NEW, Csample)
+        #Updating Actual Instances in InstanceContainer
+        #print("----------------------------Updating Existing Instances-------")
+        ExistingInstance = getChild(InstancesContainer, currentName + "_Instance")
+        if ExistingInstance:
+            print("Updating Existing Instance: ", currentName, ExistingInstance, InstancesContainer.GetName())
+
+            #see if is a instance object, if not should not update
+            isInstanceObject = c4d.InstanceObject == type(ExistingInstance)
+            print("isInstanceObject: ", isInstanceObject, type(ExistingInstance), ExistingInstance.GetName())
+
+            if isInstanceObject:
+                UpdateExistingInstance(ExistingInstance, node, True)
+        else:
+            print("Creating Missing Instance: ", currentName, InstancesContainer.GetName())
+            ExistingInstance = c4d.BaseObject(c4d.Oinstance)
+            ExistingInstance.SetName(currentName + "_Instance")
+            ExistingInstance.InsertUnder(InstancesContainer)
+            CreateNewInstanceData(ExistingInstance, node, True)
+
+
+        #Create undo for this operation
+            #print("----------------------------------Finished Existing Instances-------")
+
+        #print("----------------------------Updating SceneSamples-------")
+        #Updating Actual Objects in the scene including the Sample/Instance container. Also see if sample already exist
+        for SceneSamples in get_all_objects(SceneContainer, lambda x:UserDataAndTextureNameCheck(x, currentName, "IsSpriteSheetSample", True), []):            
+            #print("Updating Scene Objects: ", currentName)
+
+            #see if is a polygon object or instance object, if not should not update
+            isPolygonObject = c4d.PolygonObject == type(SceneSamples)
+            isinstanceObject = c4d.InstanceObject == type(SceneSamples)
+
+            if isPolygonObject:
+                XTag = None
+                for XTag in SceneSamples.GetTags():
+                    if XTag[c4d.ID_BASELIST_NAME] == "SampleUVW":
+                        CTag = XTag
+
+                SetPolygon(FileName + " Samples", SceneSamples, CTag, SceneSamples.GetPolygon(0), node)
+                UpdateExistingSample(SceneSamples, node, pivotDiff, AtlasMaterial, False)
+
+            if isinstanceObject:
+                UpdateExistingInstance(SceneSamples, node, False)
+
+            #Create undo for this operation
+            doc.AddUndo(c4d.UNDOTYPE_NEW, SceneSamples)
+        #print("----------------------------------Finished SceneSamples-------")
+
 
     #Some samples could be missing from the new atlas, is this happen, mark them as missing samples by giving a red texture and fixed size
     if len(AtlasSamplesList) > 0:
         gui.MessageDialog("Some sprites are missing from this spritesheet. They will be turned red. Delete the sprites if not needed or reimport a spritesheet containing all sprites from last import")
 
     for missingName in AtlasSamplesList:
-        # Udate samples which are missing on the new sprite sheet
-        for Csample in get_all_objects(doc.GetFirstObject(), lambda x:UserDataAndNameCheck(x, missingName, "IsSpriteSheetSample", True), []):
-            #Csample.KillTag(c4d.Ttexture)
-            CTag = Csample.GetTag(c4d.Ttexture)
-            #CTag = Csample.MakeTag(c4d.Ttexture)
-            #CTag[c4d.TEXTURETAG_PROJECTION] = 6
-            CTag.SetMaterial(MissingMaterial)
-            Csample.InsertTag(CTag, Csample.GetTag(c4d.Tvertexmap))
+        #print("----------------------------Updating Missing Samples-------")
+        # Udate objects, samples and instances  which are missing on the new sprite sheet
+        for ObjectWithMissingSample in get_all_objects(doc.GetFirstObject(), lambda x:UserDataAndNameCheck(x, missingName, "IsSpriteSheetSample", True), []):
+            SampleParent = ObjectWithMissingSample.GetUp()
 
-            if SParent == SamplesContainer:
-                Csample.InsertUnder(SamplesContainer)
+            #see if is a polygon object or instance object, if not should not update
+            isPolygonObject = c4d.PolygonObject == type(ObjectWithMissingSample)
+            isinstanceObject = c4d.InstanceObject == type(ObjectWithMissingSample)
+
+            if isPolygonObject:
+                CTag = ObjectWithMissingSample.GetTag(c4d.Ttexture)
+                CTag.SetMaterial(MissingMaterial)
+                ObjectWithMissingSample.InsertTag(CTag, ObjectWithMissingSample.GetTag(c4d.Tvertexmap))
+
+                if SampleParent == SamplesContainer:
+                    ObjectWithMissingSample.InsertUnder(SamplesContainer)
+
+            if isinstanceObject:
+                ObjectWithMissingSample[c4d.INSTANCEOBJECT_LINK] = getChild(SamplesContainer, missingName + "_Sample")
+                ObjectWithMissingSample.InsertUnder(InstancesContainer)
+        #print("----------------------------Finished Missing Samples-------")
 
     #Create a plane representing the Atlas Texture as a hole. Objects and this plane should show exacly same texture on them own position. Use this to verify if all goes right
     CAtlas = doc.SearchObject(FileName + " TextureAtlas")
+    #print("CAtlas", CAtlas)
     if not CAtlas:
         CAtlas = c4d.BaseObject(c4d.Opolygon)
         Polygon = c4d.CPolygon(0, 1, 2, 3)
@@ -1090,7 +1213,7 @@ def main(doc):
         CTag[c4d.TEXTURETAG_PROJECTION] = 6
         CTag[c4d.TEXTURETAG_MATERIAL] = AtlasMaterial
     else:
-        CTag = Csample.GetTag(c4d.Ttexture)
+        CTag = CAtlas.GetTag(c4d.Ttexture)
         PSs = []
         PSs.append(c4d.Vector(-AtlasHalfWidth, -AtlasHalfHeight, 0))
         PSs.append(c4d.Vector(AtlasHalfWidth, -AtlasHalfHeight, 0))
@@ -1101,7 +1224,6 @@ def main(doc):
         point = CAtlas.GetAllPoints()
         for i in range(pcount):
             CAtlas.SetPoint(i, PSs[i])
-
 
     #Add plane to the Atlas Container
     CAtlas.InsertUnder(SamplesContainer)
@@ -1116,7 +1238,7 @@ def main(doc):
     FusionShaderAlpha[c4d.SLA_FUSION_BLEND_CHANNEL]  = VertexShaderAlpha
 
     TVertexcolor = CAtlas.GetTag(c4d.Tvertexcolor)
-    print('TVertexcolor', TVertexcolor, CAtlas)
+    #print('TVertexcolor', TVertexcolor, CAtlas)
     VertexShaderDifuse[c4d.SLA_DIRTY_VMAP_OBJECT]  = TVertexcolor
     VertexShaderAlpha[c4d.SLA_DIRTY_VMAP_OBJECT]  = TVertexcolor
 
@@ -1126,7 +1248,6 @@ def main(doc):
     CAtlas[c4d.PRIM_PLANE_WIDTH] = float(AtlasWidth)
     CAtlas[c4d.PRIM_PLANE_HEIGHT] = float(AtlasHeight)
     CAtlas[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] = c4d.OBJECT_OFF
-
 
     doc.EndUndo()
     c4d.EventAdd()

@@ -332,10 +332,6 @@ def MaxAndMinCoord(coordinates):
             max_width = x
 
     #Print the minimum and maximum height and width values
-    #print("Minimum height:", min_height)
-    #print("Maximum height:", max_height)
-    #print("Minimum width:", min_width)
-    #print("Maximum width:", max_width)
     return [min_width, max_width, min_height, max_height]
 
 def SetPolygonVertexData(PolygonObject, node, SampleReference):
@@ -368,10 +364,43 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
         uv_tag = PolygonObject.GetTag(c4d.Tuvw)
         Refuv_tag = sampleReference.GetTag(c4d.Tuvw)
 
+        # Get the U and V components of the vertex's UV coordinates for ref sample
+        uvwRef = Refuv_tag.GetSlow(0)
+        REFuvPoints = [uvwRef["b"], uvwRef["a"], uvwRef["c"], uvwRef["d"]]
+        #print (' REPoints ', REFuvPoints)
+
         node.set('PolyCount', str(polygon_count))
+
+        uTooBig = False
+        vTooBig = False
 
         # Loop through each polygon and get the UV coordinates for its vertices
         for i in range(polygon_count):
+            #verify on the second polygon if there is something wrong with the uvs
+            #Cinema 4D has a bug related with uvs and cache which makes uvs coming with wrong values.
+            #This is a workaround to fix it.
+            #If UV is is greater than reference max ir should be divided by number of polygons (crazy but...)
+            if(polygon_count > 1 and i==0):
+                uvw = uv_tag.GetSlow(i+1)
+                uvPoints = [uvw["b"], uvw["a"], uvw["c"], uvw["d"]]
+                nextUVpoint = uvPoints[0]
+
+                Range = MaxAndMinCoord(REFuvPoints)
+                
+                uMin = Range[0]
+                uMax = Range[1]
+                vMin = Range[2]
+                vMax = Range[3]
+
+                u = nextUVpoint.x
+                v = nextUVpoint.y
+
+                if(u > uMax):
+                    uTooBig = True
+                if(v > vMax):
+                    vTooBig = True
+
+            #print("---------------------------------------------")
             vertex_positions = ""
             vertex_uvs = ""
 
@@ -390,24 +419,18 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             # Get the indices of the points for the current polygon. Note that the order is different from Cinema to Sephius Engine
             pointsIndx = [poly.b, poly.a, poly.c, poly.d]
             uvPoints = [uvw["b"], uvw["a"], uvw["c"], uvw["d"]]
-
-            # Get the U and V components of the vertex's UV coordinates for ref sample
-            uvwRef = Refuv_tag.GetSlow(0)
-            REFuvPoints = [uvwRef["b"], uvwRef["a"], uvwRef["c"], uvwRef["d"]]
-            #print(REFuvPoints)
-
             Range = MaxAndMinCoord(REFuvPoints)
-
+            
             uMin = Range[0]
             uMax = Range[1]
             vMin = Range[2]
             vMax = Range[3]
 
-            #print ('REPoints ', REFuvPoints)
-            #print ('uvPoints ', uvPoints)
+            #print("uMin", uMin, "uMax", uMax, "vMin", vMin, "vMax", vMax)
 
             for j in range(4):
-                # Get the vertex index for the current vertex of the polygon
+
+                # Get the vertex sindex for the current vertex of the polygon
                 point = PolygonObject.GetPoint(pointsIndx[j])
                 x = point.x
                 y = -point.y
@@ -418,8 +441,15 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
                 v = UVpoint.y
 
                 #remap uv to be proportional to reference sample. In SephiusEngine, we acess the sub texture which has values from 0 to 1.
+                #print("u", u, "v", v)
                 u = remap(u, uMin, uMax)
                 v = remap(v, vMin, vMax)
+                #print("u Remaped", u, "v Rempaed", v)
+
+                if(uTooBig):
+                    u = u / polygon_count
+                if(vTooBig):
+                    v = v / polygon_count   
 
                 # Add the U and V components to the vertex UV coordinates string
                 vertex_uvs += "{},{},".format(u, v)
@@ -449,7 +479,7 @@ def SetPolygonVertexData(PolygonObject, node, SampleReference):
             VertexNode.set('PointCount', str(4))
             VertexNode.set('Positions', vertex_positions)
             VertexNode.set('Coords', vertex_uvs)
-
+            #print("---------------------------------------------")
             #print("Polygon:", PolygonObject.GetName(), "Processed")
     else:
        print("Provided object is not a polygon object ", PolygonObject)
@@ -1044,6 +1074,8 @@ def PreDefineCompound(obj, obj_node, indent, doc):
     ObjGetMg = obj.GetMg()
     ObjeParent = obj.GetUp()
 
+    obj.Message(c4d.MSG_UPDATE)
+    
     if HasModifiers == False:
         CompoundCache = obj.GetCache()#caution with this. Can create problems with garbage collection
     else:
@@ -1057,7 +1089,7 @@ def PreDefineCompound(obj, obj_node, indent, doc):
             #update_doc()
             #doc.InsertObject(new_object[0])
             CompoundCache = new_object[0]
-
+            CompoundCache.Message(c4d.MSG_UPDATE)
             #restore the position in relation to the parent
             CompoundCache.SetMg(ObjGetMg)
 
@@ -1297,6 +1329,7 @@ def parse_objects(obj, parent_node, GenerateNode, doc, indent=0, Cached=False):
     elif ObjectID == "Compound" and Cached == False:# Process compound objects
         #print("Compound Object Detected")
         PassNode = parent_node;
+        obj.Message(c4d.MSG_UPDATE)  # Send an update message to the object
         PreDefineCompound(obj, PassNode, indent, doc)
 
     else:
@@ -1332,6 +1365,10 @@ def main(doc):
     global Root
     #global doc 
     #update_doc()
+    global LocalID
+    LocalID = -1
+
+    c4d.EventAdd()
 
     Root = doc.SearchObject('LANDS OF OBLIVION')
 
