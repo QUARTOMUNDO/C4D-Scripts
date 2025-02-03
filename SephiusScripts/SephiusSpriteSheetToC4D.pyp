@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
 XMLpath = ""
 PNGpath = ""
-FileName = ""
+#FileName = ""
 folderPath = ""
 TextureSizeRatio = 1
 TextureBiggerSize = 1024
@@ -168,19 +168,40 @@ def UserDataAndNameCheck(CObject, OName, UDName, Value):
         return False
     return True
 
-#nulls = get_all_objects(doc.GetFirstObject(), lambda x: x.CheckType(c4d.Onull), [])
-def get_all_objects(Container, filter, output):
-    #print("----------------")
-    #print("Get all objects in container: ", Container)
-    #print("----------------")
-    while Container:
-        if filter(Container):
-            output.append(Container)
-            #print("Getting Object: ", Container)
-        if Container.GetDown():
-            get_all_objects(Container.GetDown(), filter, output)
-        Container = Container.GetNext()
-    return output
+def get_all_objects(container, filter_function=lambda x: True):
+    """
+    Itera recursivamente pelos objetos filhos de um Container no Cinema 4D,
+    processando subcontainers e seus descendentes.
+
+    Args:
+        container (c4d.BaseObject): O objeto inicial cujos filhos serão processados.
+        filter_function (function): Uma função lambda que retorna True para objetos que devem ser incluídos.
+                                    Por padrão, todos os objetos são incluídos.
+
+    Returns:
+        list: Uma lista de objetos filhos que atendem ao critério do filtro.
+    """
+    if not container:
+        return []
+
+    filtered_objects = []
+
+    # Obter o primeiro filho do container
+    child = container.GetDown()
+
+    # Iterar pelos filhos
+    while child:
+        # Aplica o filtro; se for True, adiciona o objeto à lista
+        if filter_function(child):
+            filtered_objects.append(child)
+
+        # Recursivamente processar os filhos do objeto atual (subcontainers e seus descendentes)
+        filtered_objects.extend(get_all_objects(child, filter_function))
+
+        # Ir para o próximo objeto no mesmo nível (entre os filhos do container)
+        child = child.GetNext()
+
+    return filtered_objects
 
 def getChildrenWithPrefix(parent, childPrefix):
     PChildren = []
@@ -233,8 +254,63 @@ def getChild(parent, childName):
 
     return None
 
+def IsUserDataSupported(CObject):
+    """
+    Verifica se o objeto suporta User Data Container.
+
+    Args:
+        CObject (c4d.BaseObject): O objeto a ser verificado.
+
+    Returns:
+        bool: True se o objeto suporta User Data, False caso contrário.
+    """
+
+    if not IsValidObject(CObject):
+        return False
+
+    # Verifica se o método GetUserDataContainer existe no objeto
+    if not hasattr(CObject, 'GetUserDataContainer'):
+        return False
+
+    return True
+
+def IsValidObject(obj):
+    """
+    Verifica se um objeto do Cinema 4D é válido para uso.
+    
+    Args:
+        obj (c4d.BaseObject): O objeto a ser verificado.
+        
+    Returns:
+        bool: True se o objeto for válido, False caso contrário.
+    """
+    # Verifica se o objeto é uma instância de BaseList2D (o que inclui objetos com User Data)
+    if not isinstance(obj, c4d.BaseList2D):
+        print(f"Objeto não é instancia de BaseList2D: {e}")
+        return False
+    
+    try:
+        # Verifica se o objeto não é None
+        if obj is None:
+            return False
+                
+        # Tenta acessar o nome para garantir que a referência está válida
+        _ = obj.GetName()
+        print("Trying to Validate: ", obj)
+        return True
+    except Exception as e:
+        # Qualquer exceção capturada indica que o objeto é inválido
+        print(f"Objeto inválido detectado: {e}")
+        return False
+
 #Return true if object has a user data name and value is equal to desired
 def GetUserData(CObject, UDName):
+    print("GetUserData OBJECT?: ", CObject)
+    print("GetUserData: ", CObject.GetName(), UDName)
+    if not IsUserDataSupported(CObject):  # Verifica se o objeto é válido
+        print(f"Erro: Não é possível acessar o UserData '{UDName}'")
+        return None
+
     for id, bc in CObject.GetUserDataContainer():
         #print(bc[c4d.DESC_NAME], UDName)
         if bc[c4d.DESC_NAME] == UDName:
@@ -287,14 +363,17 @@ def setColorTagWithData(CContainer):
     CTag_field_container.InsertLayer(FieldColor)
     CTag[c4d.ID_VERTEXCOLOR_FIELDS] = CTag_field_container
 
-def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode):
-    #print("Getting Atlas Sizes: ", AtlasWidth, AtlasHeight)
+def SetRefPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode):
+    print("SetRefPolygon: ", ParentName, CObject.GetName(), UVWTag, Polygon, TextureNode)
     #AtlasWidth =  float(TextureNode.attrib.get("width")) * ScaleRatio
     #AtlasHeight = float(TextureNode.attrib.get("height")) * ScaleRatio
 
+    pcount = CObject.GetPointCount()
+    points = CObject.GetAllPoints()
+
     CHalfWidth = float(TextureNode.attrib.get("width")) * 0.5
     CHalfHeight = float(TextureNode.attrib.get("height")) * 0.5
-
+    print("pcount1 ", pcount)
     pivotDiff = setPivotDiff(TextureNode)
 
     CX = float(TextureNode.attrib.get("x")) - AtlasHalfWidth + CHalfWidth
@@ -312,7 +391,7 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode):
     pY = CPY * ScaleRatio
     hX = CPW * ScaleRatio
     hY = CPH * ScaleRatio
-
+    
     PSs = []
     PSs.append(c4d.Vector(pX, pY, 0) + pivotDiff)
     PSs.append(c4d.Vector(hX, pY, 0) + pivotDiff)
@@ -338,10 +417,22 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode):
     
         #re-rotate the object
         CObject[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = math.pi / 2
-        
+
+    if not Polygon or pcount == 0:
+        print("Polygon is None or has no points")
+        Polygon = c4d.CPolygon(0, 1, 2, 3)
+        Polygon.__init__(0, 1, 2, 3)
+        CObject.ResizeObject(4, 1)
+        CObject.SetPolygon(0, Polygon)
+        pcount = CObject.GetPointCount()
+
+    print("pcount2 ", CObject.GetPointCount(), "polygon: ", Polygon, "points: ", PSs)
+    for i in range(pcount):
+        CObject.SetPoint(i, PSs[i])
+
     #print("UV Coord px: ", float(TextureNode.attrib.get("x")), float(TextureNode.attrib.get("y")), float(TextureNode.attrib.get("width")), float(TextureNode.attrib.get("height")))
     CoX = float(TextureNode.attrib.get("x")) * ScaleRatio / AtlasWidth
-    CoY = float(TextureNode.attrib.get("y"))  * ScaleRatio/ AtlasHeight
+    CoY = float(TextureNode.attrib.get("y"))  * ScaleRatio / AtlasHeight
     CoHX = (float(TextureNode.attrib.get("x")) + float(TextureNode.attrib.get("width"))) * ScaleRatio / AtlasWidth
     CoHY = (float(TextureNode.attrib.get("y")) + float(TextureNode.attrib.get("height"))) * ScaleRatio / AtlasHeight
 
@@ -351,30 +442,92 @@ def SetPolygon(ParentName, CObject, UVWTag, Polygon, TextureNode):
     PCSs.append(c4d.Vector(CoHX, CoHY, 0))
     PCSs.append(c4d.Vector(CoX, CoHY, 0))
 
-    #Update object. Need to update bound box for selection and etc.
-    #CObject.Message (c4d.MSG_UPDATE)
-
-    #print("Atlas: ", AtlasWidth, AtlasHeight)
-    #print("UVW: ", CoX, CoY, CoHX, CoHY)
-
-    if not Polygon:
-        Polygon = c4d.CPolygon(0, 1, 2, 3)
-        Polygon.__init__(0, 1, 2, 3)
-        CObject.ResizeObject(4, 1)
-        CObject.SetPolygon(0, Polygon)
-
     if not UVWTag:
         UVWTag = CObject.MakeVariableTag(c4d.Tuvw, 1)
         UVWTag[c4d.ID_BASELIST_NAME] = "SampleUVW"
         CObject.InsertTag(UVWTag)
 
-    pcount = CObject.GetPointCount()
-    point = CObject.GetAllPoints()
-    #print(pcount)
-    for i in range(pcount):
-        CObject.SetPoint(i, PSs[i])
-
     UVWTag.SetSlow(0, PCSs[0], PCSs[1], PCSs[2], PCSs[3])
+
+def UpdateScenePolygonUVs(ScenePolygonObject, SampleReference):
+    """
+    Atualiza os dados UV de um PolygonObject com base em um SampleReference e o atlas de textura,
+    preservando as proporções relativas do mapeamento UV original.
+    """
+    print("UpdateScenePolygonUVs: ", ScenePolygonObject.GetName(), SampleReference.GetName())
+
+    # Verifica se o objeto de referência é um PolygonObject
+    isPolygon = isinstance(SampleReference, c4d.PolygonObject)
+    if not isPolygon:
+        print(f"Erro: SampleReference '{SampleReference.GetName()}' não é um PolygonObject.")
+        return
+
+    # Verificar tags UV
+    uv_tag = ScenePolygonObject.GetTag(c4d.Tuvw)
+    Refuv_tag = SampleReference.GetTag(c4d.Tuvw)
+    if not uv_tag or not Refuv_tag:
+        print(f"Erro: UVTag ausente em {ScenePolygonObject.GetName()} ou {SampleReference.GetName()}.")
+        return
+
+    # Coordenadas UV da referência
+    uvwRef = Refuv_tag.GetSlow(0)
+    REFuvPoints = [uvwRef["a"], uvwRef["b"], uvwRef["c"], uvwRef["d"]]
+
+    # Determinar os limites UV da referência
+    ref_uMin, ref_uMax = min(p.x for p in REFuvPoints), max(p.x for p in REFuvPoints)
+    ref_vMin, ref_vMax = min(p.y for p in REFuvPoints), max(p.y for p in REFuvPoints)
+    print(f"Limites UV da referência: u=[{ref_uMin}, {ref_uMax}], v=[{ref_vMin}, {ref_vMax}]")
+
+    # Coordenadas UV do objeto da cena
+    all_uv_points = []
+    for i in range(ScenePolygonObject.GetPolygonCount()):
+        uvw = uv_tag.GetSlow(i)
+        all_uv_points.extend([uvw["a"], uvw["b"], uvw["c"], uvw["d"]])
+
+    # Determinar os limites UV do objeto da cena
+    obj_uMin, obj_uMax = min(p.x for p in all_uv_points), max(p.x for p in all_uv_points)
+    obj_vMin, obj_vMax = min(p.y for p in all_uv_points), max(p.y for p in all_uv_points)
+    print(f"Limites UV do objeto da cena: u=[{obj_uMin}, {obj_uMax}], v=[{obj_vMin}, {obj_vMax}]")
+
+    # Atualizar as coordenadas UV para cada polígono
+    for i in range(ScenePolygonObject.GetPolygonCount()):
+        poly = ScenePolygonObject.GetPolygon(i)
+        uvw = uv_tag.GetSlow(i)
+        uvPoints = [uvw["a"], uvw["b"], uvw["c"], uvw["d"]]
+
+        # Verifica e ajusta as coordenadas UV com base nos limites
+        for j, vertexIndex in enumerate([poly.b, poly.a, poly.c, poly.d]):
+            if vertexIndex == -1:  # Vértice inválido em triângulos
+                continue
+
+            UVpoint = uvPoints[j]
+            u = UVpoint.x
+            v = UVpoint.y
+
+            # Ajusta a posição relativa dentro dos limites do objeto da cena
+            relative_u = (u - obj_uMin) / (obj_uMax - obj_uMin) if obj_uMax != obj_uMin else 0
+            relative_v = (v - obj_vMin) / (obj_vMax - obj_vMin) if obj_vMax != obj_vMin else 0
+
+            # Remapeia para os limites da referência
+            u = ref_uMin + (ref_uMax - ref_uMin) * relative_u
+            v = ref_vMin + (ref_vMax - ref_vMin) * relative_v
+
+            # Atualiza as coordenadas UV no UVWTag
+            uvPoints[j] = c4d.Vector(u, v, 0)
+
+        # Aplica as novas coordenadas UV ao polígono
+        uv_tag.SetSlow(i, uvPoints[0], uvPoints[1], uvPoints[2], uvPoints[3])
+
+    # Confirma as alterações no Cinema 4D
+    c4d.EventAdd()
+    print(f"UVs atualizados para o objeto '{ScenePolygonObject.GetName()}'.")
+
+
+def remap(value, min_val, max_val):
+    """
+    Função utilitária para remapear um valor dentro de um intervalo.
+    """
+    return (value - min_val) / (max_val - min_val)
 
 def PositionOriginalSample(Sample, node, pivotDiff):
     global AtlasHalfWidth
@@ -417,13 +570,18 @@ def PositionOriginalInstance(Instance, node):
     Instance[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z] = SampleReference[c4d.ID_BASEOBJECT_REL_ROTATION,c4d.VECTOR_Z]
     print("Instance Position Set", Instance[c4d.ID_BASEOBJECT_REL_POSITION], SampleReference[c4d.ID_BASEOBJECT_REL_POSITION])
 
-def UpdateExistingSample(ExistingSample, node, pivotDiff, AtlasMaterial, isOriginalInstance):
-    MVCTag = ExistingSample.GetTag(c4d.Tvertexmap)
-    CTag = ExistingSample.GetTag(c4d.Ttexture)
-    CTag.SetMaterial(AtlasMaterial)
-    ExistingSample.InsertTag(CTag, MVCTag)
+def UpdateExistingSample(ExistingSample, node, pivotDiff, AtlasMaterial, isOriginalSample):
+    isPolygonObject = isinstance(ExistingSample, c4d.PolygonObject)
 
-    if isOriginalInstance:
+    if not isPolygonObject:
+        return
+    
+    #MVCTag = ExistingSample.GetTag(c4d.Tvertexmap)
+    #CTag = ExistingSample.GetTag(c4d.Ttexture)
+    #CTag.SetMaterial(AtlasMaterial)
+    #ExistingSample.InsertTag(CTag, MVCTag)
+
+    if isOriginalSample:
         #Is is a original sample inside SamplesContainer
         #print("Original Sample")
         PositionOriginalSample(ExistingSample, node, pivotDiff)
@@ -431,56 +589,71 @@ def UpdateExistingSample(ExistingSample, node, pivotDiff, AtlasMaterial, isOrigi
     UVWTag = ExistingSample.GetTag(c4d.Tuvw)
     VertexCoord = UVWTag.GetSlow(0)
     for i in range(4):
-        element = GetUserData(ExistingSample, "Vertex " + str(i) + " Position")
-        ExistingSample[element] = ExistingSample.GetPoint(i)
+        if HasUserData(ExistingSample, "Vertex " + str(i) + " Position"):
+            element = GetUserData(ExistingSample, "Vertex " + str(i) + " Position")
+            ExistingSample[element] = ExistingSample.GetPoint(i)
 
-        element = GetUserData(ExistingSample, "Vertex " + str(i) + " UVW")
-        if i == 0:
-            ExistingSample[element] = VertexCoord["a"]
-        elif  i == 1:
-            ExistingSample[element] = VertexCoord["b"]
-        elif  i == 2:
-            ExistingSample[element] = VertexCoord["c"]
-        else:
-            ExistingSample[element] = VertexCoord["d"]
+        if HasUserData(ExistingSample, "Vertex " + str(i) + " UVW"):
+            element = GetUserData(ExistingSample, "Vertex " + str(i) + " UVW")
 
-    element = GetUserData(ExistingSample, "Offset")
-    ExistingSample[element] = pivotDiff
+            if i == 0:
+                ExistingSample[element] = VertexCoord["a"]
+            elif  i == 1:
+                ExistingSample[element] = VertexCoord["b"]
+            elif  i == 2:
+                ExistingSample[element] = VertexCoord["c"]
+            else:
+                ExistingSample[element] = VertexCoord["d"]
 
-    element = GetUserData(ExistingSample, "Texture Width")
-    ExistingSample[element] = float(node.attrib.get("width")) * ScaleRatio
+    if HasUserData(ExistingSample, "Offset"):
+        element = GetUserData(ExistingSample, "Offset")
+        ExistingSample[element] = pivotDiff
 
-    element = GetUserData(ExistingSample, "Texture Height")
-    ExistingSample[element] = float(node.attrib.get("height")) * ScaleRatio
-
-    element = GetUserData(ExistingSample, "Texture Frame X")
-    if(node.attrib.get("frameX")):
-        ExistingSample[element] = float(node.attrib.get("frameX")) * ScaleRatio
-    else:
-        ExistingSample[element] = 0
-
-    element = GetUserData(ExistingSample, "Texture Frame Y")
-    if(node.attrib.get("frameY")):
-        ExistingSample[element] = float(node.attrib.get("frameY")) * ScaleRatio
-    else:
-        ExistingSample[element] = 0
-
-    element = GetUserData(ExistingSample, "Texture Frame Width")
-    if(node.attrib.get("frameWidth")):
-        ExistingSample[element] = float(node.attrib.get("frameWidth")) * ScaleRatio
-    else:
+    if HasUserData(ExistingSample, "Texture Width"):
+        element = GetUserData(ExistingSample, "Texture Width")
         ExistingSample[element] = float(node.attrib.get("width")) * ScaleRatio
 
-    element = GetUserData(ExistingSample, "Texture Frame Height")
-    if(node.attrib.get("frameHeight")):
-        ExistingSample[element] = float(node.attrib.get("frameHeight")) * ScaleRatio
-    else:
+    if HasUserData(ExistingSample, "Texture Height"):
+        element = GetUserData(ExistingSample, "Texture Height")
         ExistingSample[element] = float(node.attrib.get("height")) * ScaleRatio
+
+    if HasUserData(ExistingSample, "Texture Frame X"):
+        element = GetUserData(ExistingSample, "Texture Frame X")
+        if(node.attrib.get("frameX")):
+            ExistingSample[element] = float(node.attrib.get("frameX")) * ScaleRatio
+        else:
+            ExistingSample[element] = 0
+
+    if HasUserData(ExistingSample, "Texture Frame Y"):
+        element = GetUserData(ExistingSample, "Texture Frame Y")
+        if(node.attrib.get("frameY")):
+            ExistingSample[element] = float(node.attrib.get("frameY")) * ScaleRatio
+        else:
+            ExistingSample[element] = 0
+
+    if HasUserData(ExistingSample, "Texture Frame Width"):
+        element = GetUserData(ExistingSample, "Texture Frame Width")
+        if(node.attrib.get("frameWidth")):
+            ExistingSample[element] = float(node.attrib.get("frameWidth")) * ScaleRatio
+        else:
+            ExistingSample[element] = float(node.attrib.get("width")) * ScaleRatio
+
+    if HasUserData(ExistingSample, "Texture Frame Height"):
+        element = GetUserData(ExistingSample, "Texture Frame Height")
+        if(node.attrib.get("frameHeight")):
+            ExistingSample[element] = float(node.attrib.get("frameHeight")) * ScaleRatio
+        else:
+            ExistingSample[element] = float(node.attrib.get("height")) * ScaleRatio
 
     #Fix sample position if pivot has changes so sample continue in same position visually speaking
     #ExistingSample[c4d.ID_BASEOBJECT_REL_POSITION] = ExistingSample[c4d.ID_BASEOBJECT_REL_POSITION] - pivotDiff
 
 def UpdateExistingInstance(ExistingInstance, node, isOriginalInstance):
+    isInstanceObject = isinstance(ExistingInstance, c4d.InstanceObject)
+
+    if not isInstanceObject:
+        return
+    
     global SamplesContainer
 
     SampleReference = ExistingInstance[c4d.INSTANCEOBJECT_LINK]
@@ -507,7 +680,8 @@ def UpdateExistingInstance(ExistingInstance, node, isOriginalInstance):
 
 def CreateNewSampleData(NewSample, node, currentName, pivotDiff, AtlasMaterial):
     PositionOriginalSample(NewSample, node, pivotDiff)
-    
+    global FileName
+
     bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_GROUP)
     bc[c4d.DESC_NAME] = "OBJECT EXPORT INFO"
     bc[c4d.DESC_SHORT_NAME] = "OBJECT EXPORT INFO"
@@ -572,6 +746,7 @@ def CreateNewSampleData(NewSample, node, currentName, pivotDiff, AtlasMaterial):
     bc[c4d.DESC_PARENTGROUP] = GamePropertiesGroup
     element = NewSample.AddUserData(bc)
     NewSample[element] = FileName
+    print("FileName inside CreateNewSampleData:", FileName)  # Debug
 
     bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_STRING)
     bc[c4d.DESC_NAME] = "blendMode"
@@ -777,6 +952,30 @@ def CreateNewInstanceData(NewInstance, node, isOriginalInstance):
     element = NewInstance.AddUserData(bc)
     NewInstance[element] = SampleReference
 
+def setAsMissingMaterial(doc, ObjectWithMissingSample, SampleParent):
+    isPolygonObject = c4d.PolygonObject == type(ObjectWithMissingSample)
+    
+    MissingMaterial = doc.SearchMaterial("Missing Sample Material")
+    if not MissingMaterial:
+        # create MissingMaterial
+        MissingMaterial = c4d.BaseMaterial(c4d.Mmaterial)
+        MissingMaterial.SetName( "Missing Sample Material" )
+        MissingMaterial[c4d.MATERIAL_COLOR_COLOR] = c4d.Vector(255, 0, 0)
+        MissingMaterial[c4d.MATERIAL_USE_REFLECTION] = False
+        MissingMaterial.Message( c4d.MSG_UPDATE )
+        MissingMaterial.Update( True, True )
+        doc.InsertMaterial(MissingMaterial)
+
+    print("Setting Missing Material to: ", ObjectWithMissingSample.GetName(), "MissingMaterial ", MissingMaterial.GetName())
+
+    if isPolygonObject:
+        CTag = ObjectWithMissingSample.GetTag(c4d.Ttexture)
+        CTag.SetMaterial(MissingMaterial)
+        ObjectWithMissingSample.InsertTag(CTag, ObjectWithMissingSample.GetTag(c4d.Tvertexmap))
+
+        if SampleParent == SamplesContainer:
+            ObjectWithMissingSample.InsertUnder(SamplesContainer)
+
 InstancesContainer = None
 SamplesContainer = None
 AtlasHalfWidth = 0
@@ -801,7 +1000,9 @@ def main(doc):
     #Convert path string to a array to remove file name and so get the folder name
     pathStruct = XMLpath.split("\\")
     #Get the file name without the extention
+    global FileName
     FileName = pathStruct.pop()[:-4]
+    
     pathStruct2 = []
 
     #Joint the string again without the file name
@@ -994,12 +1195,14 @@ def main(doc):
     #print("Sample List USer Data: ", SamplesContainer[c4d.ID_USERDATA,4])
     #Temporary Store Sample Container Samples List
     AtlasSamplesList = (SamplesContainer[c4d.ID_USERDATA,4]).split("_Sample,\n")
-    if len(AtlasSamplesList) == 0:
+    if len(AtlasSamplesList) <= 1:
+        print("No Samples in the Scene using ',' as separator")
         AtlasSamplesList = (SamplesContainer[c4d.ID_USERDATA,4]).split(",\n")
-        
+
+    print("Sample List: ", len(AtlasSamplesList))
+
     #Remove empty last element
     AtlasSamplesList.pop()
-    #print("Sample List: ", AtlasSamplesList)
 
     #Clear the Sample Container Sample List to make a new one
     SamplesContainer[c4d.ID_USERDATA,4] = ""
@@ -1018,8 +1221,9 @@ def main(doc):
         pivotDiff = setPivotDiff(node)
 
         #Verify if current sample data is on current sample list in the scene
+        print("Current Sample: ", currentName)
         if (currentName) in AtlasSamplesList:
-            #print("Sample is listed")
+            print("Sample is listed")
             SampleListIndex = AtlasSamplesList.index(currentName)
             #Remove the sample from the this temporary list as they are being processed
             AtlasSamplesList.pop(SampleListIndex)
@@ -1048,7 +1252,7 @@ def main(doc):
                     if XTag[c4d.ID_BASELIST_NAME] == "SampleUVW":
                         CTag = XTag
 
-                SetPolygon(FileName + " Samples", ExistingSample, CTag, ExistingSample.GetPolygon(0), node)
+                SetRefPolygon(FileName + " Samples", ExistingSample, CTag, ExistingSample.GetPolygon(0), node)
                 UpdateExistingSample(ExistingSample, node, pivotDiff, AtlasMaterial, True)
             #Create undo for this operation
             doc.AddUndo(c4d.UNDOTYPE_NEW, ExistingSample)
@@ -1063,7 +1267,7 @@ def main(doc):
             Csample.SetName(currentName + "_Sample")
             Csample.InsertUnder(SamplesContainer)
 
-            SetPolygon(FileName + " Samples", Csample, None, None, node)
+            SetRefPolygon(FileName + " Samples", Csample, None, None, node)
             CreateNewSampleData(Csample, node, currentName, pivotDiff, AtlasMaterial)
             
             #Refresh the managers to show the new object
@@ -1099,38 +1303,66 @@ def main(doc):
 
         #print("----------------------------Updating SceneSamples-------")
         #Updating Actual Objects in the scene including the Sample/Instance container. Also see if sample already exist
-        for SceneSamples in get_all_objects(SceneContainer, lambda x:UserDataAndTextureNameCheck(x, currentName, "IsSpriteSheetSample", True), []):            
-            #print("Updating Scene Objects: ", currentName)
+        for SceneSample in get_all_objects(SceneContainer, lambda x:UserDataAndTextureNameCheck(x, currentName, "IsSpriteSheetSample", True)):            
+            print("Updating Scene Objects: ", currentName, SceneSample.GetName(), " SceneContainer ", SceneContainer.GetName())
 
             #see if is a polygon object or instance object, if not should not update
-            isPolygonObject = c4d.PolygonObject == type(SceneSamples)
-            isinstanceObject = c4d.InstanceObject == type(SceneSamples)
+            isPolygonObject = c4d.PolygonObject == type(SceneSample)
+            isinstanceObject = c4d.InstanceObject == type(SceneSample)
 
             if isPolygonObject:
                 XTag = None
-                for XTag in SceneSamples.GetTags():
+                for XTag in SceneSample.GetTags():
                     if XTag[c4d.ID_BASELIST_NAME] == "SampleUVW":
                         CTag = XTag
 
-                SetPolygon(FileName + " Samples", SceneSamples, CTag, SceneSamples.GetPolygon(0), node)
-                UpdateExistingSample(SceneSamples, node, pivotDiff, AtlasMaterial, False)
+                print("Updating Polygon Scene Objects: ", currentName)
+
+                SampleReference = getChild(SamplesContainer, currentName + "_Sample")
+
+                if not SampleReference:
+                    print("Sample Reference not found: ", currentName + "_Sample")
+                    return
+                
+                UpdateScenePolygonUVs(SceneSample, SampleReference)
+                #SetRefPolygon(FileName + " Samples", SceneSample, CTag, SceneSample.GetPolygon(0), node)
+                UpdateExistingSample(SceneSample, node, pivotDiff, AtlasMaterial, False)
 
             if isinstanceObject:
-                UpdateExistingInstance(SceneSamples, node, False)
+                UpdateExistingInstance(SceneSample, node, False)
 
             #Create undo for this operation
-            doc.AddUndo(c4d.UNDOTYPE_NEW, SceneSamples)
+            doc.AddUndo(c4d.UNDOTYPE_NEW, SceneSample)
         #print("----------------------------------Finished SceneSamples-------")
 
 
     #Some samples could be missing from the new atlas, is this happen, mark them as missing samples by giving a red texture and fixed size
+    print("AtlasSamplesList", len(AtlasSamplesList))
     if len(AtlasSamplesList) > 0:
         gui.MessageDialog("Some sprites are missing from this spritesheet. They will be turned red. Delete the sprites if not needed or reimport a spritesheet containing all sprites from last import")
 
     for missingName in AtlasSamplesList:
-        #print("----------------------------Updating Missing Samples-------")
+        print("----------------------------Updating Missing Samples-------")
+        print("Missing Sample: ", missingName)
+
         # Udate objects, samples and instances  which are missing on the new sprite sheet
-        for ObjectWithMissingSample in get_all_objects(doc.GetFirstObject(), lambda x:UserDataAndNameCheck(x, missingName, "IsSpriteSheetSample", True), []):
+
+        ExistingInstance = getChild(InstancesContainer, missingName + "_Instance")
+        ExistingSample = getChild(SamplesContainer, missingName + "_Sample")
+        
+        if ExistingInstance:
+            print("Missing Existing Instance: ", ExistingInstance)
+            SampleParent = ExistingInstance.GetUp()
+            ExistingInstance[c4d.INSTANCEOBJECT_LINK] = getChild(SamplesContainer, missingName + "_Sample")
+            ExistingInstance.InsertUnder(InstancesContainer)
+        
+        if ExistingSample:
+            print("Missing Existing Sample: ", ExistingSample)
+            SampleParent = ExistingInstance.GetUp()
+            setAsMissingMaterial(doc, ExistingSample, SampleParent)
+        
+        for ObjectWithMissingSample in get_all_objects(SceneContainer, lambda x:UserDataAndNameCheck(x, missingName, "IsSpriteSheetSample", True)):
+            print("Missing Scene Object: ", ObjectWithMissingSample)
             SampleParent = ObjectWithMissingSample.GetUp()
 
             #see if is a polygon object or instance object, if not should not update
@@ -1138,16 +1370,12 @@ def main(doc):
             isinstanceObject = c4d.InstanceObject == type(ObjectWithMissingSample)
 
             if isPolygonObject:
-                CTag = ObjectWithMissingSample.GetTag(c4d.Ttexture)
-                CTag.SetMaterial(MissingMaterial)
-                ObjectWithMissingSample.InsertTag(CTag, ObjectWithMissingSample.GetTag(c4d.Tvertexmap))
-
-                if SampleParent == SamplesContainer:
-                    ObjectWithMissingSample.InsertUnder(SamplesContainer)
+                setAsMissingMaterial(doc, ObjectWithMissingSample, SampleParent)      
 
             if isinstanceObject:
                 ObjectWithMissingSample[c4d.INSTANCEOBJECT_LINK] = getChild(SamplesContainer, missingName + "_Sample")
                 ObjectWithMissingSample.InsertUnder(InstancesContainer)
+
         #print("----------------------------Finished Missing Samples-------")
 
     #Create a plane representing the Atlas Texture as a hole. Objects and this plane should show exacly same texture on them own position. Use this to verify if all goes right

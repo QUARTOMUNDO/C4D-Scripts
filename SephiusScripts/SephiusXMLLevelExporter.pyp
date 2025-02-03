@@ -793,9 +793,17 @@ def PreDefineGameSprite(obj, obj_node, doc):
     obj_node.set('scaleOffsetX',  str(1))#Should be decided by game system
     obj_node.set('scaleOffsetY',  str(1))#Should be decided by game system
 
-    obj_node.set('parallax',  str(findParallax(obj)))
-    #obj_node.set('parallax',  str(GetUserData(obj, "parallax")))
+    parallax = GetUserData(obj, "parallax")
 
+    # Certifique-se de que 'parallax' é tratado corretamente como inteiro ou None
+    if parallax is None or parallax == -1 or str(parallax) == "None" or str(parallax) == "-1":
+        print("Parallax should be calculated", parallax)
+        parallax = str(findParallax(obj))  # Converte para string apenas depois
+
+    print("Parallax UserData: ", str(GetUserData(obj, "parallax")), "Calculated Parallax: ", parallax)
+
+    obj_node.set('parallax',  str(parallax))
+    #obj_node.set('parallax',  str(GetUserData(obj, "parallax")))
 
     print("==============")
     print("GAME SPRITE PROCESSED", obj.GetName())
@@ -810,7 +818,7 @@ def findParallax(obj):
     else:
         parallax = (1/distance) * 1920
 
-    parallax = int(parallax * 100) / 100
+    parallax = int(parallax * 1000) / 1000
 
     return parallax
 
@@ -1344,7 +1352,7 @@ def parse_objects(obj, parent_node, GenerateNode, doc, indent=0, Cached=False):
         # Invert the order of the children list
         #print("Processing Children of ", obj)
         #print("Processing Children of ", obj.GetName())
-        print("Testing Child alive ", obj.IsAlive())#removing this could make script crash for some unknown reason reaon (garbage collection?)
+        #print("Testing Child alive ", obj.IsAlive())#removing this could make script crash for some unknown reason reaon (garbage collection?)
         #print("Testing Child retrive ", obj.GetDown())
         children = obj.GetChildren()[::-1]
         # Recursively parse through all children of the current object
