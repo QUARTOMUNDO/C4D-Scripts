@@ -1068,6 +1068,32 @@ def PreDefineGameObject(obj, obj_node, doc):
             obj_node.set("width", str(bounds[1].x))
             obj_node.set("height", str(bounds[1].y))
             obj_node.set("shapeType", "Box")
+    
+    # Get the vertex map tag by name
+    if(obj is not None):
+        vtag = obj.GetTag(c4d.Tvertexcolor)
+
+    #print('--------------------------------')
+    #print('Tag ', vtag)
+    
+    #Get Alpha and Color from vertex color tag
+    if (vtag):
+        # Get the number of fields in the Vertex Color Tag
+        fields = vtag[c4d.ID_VERTEXCOLOR_FIELDS]
+        fieldsCount = fields.GetCount()
+        fieldsRoot = fields.GetLayersRoot()
+        ColorField = fieldsRoot.GetFirst()
+        AlphaFiels = ColorField.GetNext()
+
+        obj_node.set('alpha', str(AlphaFiels.GetStrength()))
+
+        color = ColorField[c4d.FIELDLAYER_COLORIZE_COLORTOP]
+        color = rgb_to_uint(color)
+        obj_node.set('color', str(color))
+    else:
+        obj_node.set('alpha', str(1))
+        color = rgb_to_uint(c4d.Vector(1, 1, 1))
+        obj_node.set('color', str(color))
 
     print("==============")
     print("GAME OBJECT PROCESSED")
@@ -1306,13 +1332,30 @@ def PreDefineObjectType(obj, obj_node, doc, indent):
     #Special Type of Objects composed by Clonners and other special techniques
     elif(ObjectID == "Compound"):
         PreDefineCompound(obj, obj_node, indent, doc)
+    else:
+        HasSSSUserData = HasUserData(obj, "IsSpriteSheetSample")
+        HasIGOUserData = HasUserData(obj, "IsGameObject")
+        IsSpriteSheetSample = False
+        IsGameObject = False
 
-    #Images inside containers
-    elif((GetUserData(obj, "IsSpriteSheetSample", False)) == True):
-        PreDefineImage(obj, obj_node, doc)
+        #Test both object user data and user data tags
+        if HasSSSUserData:
+            IsSpriteSheetSample = GetUserData(obj, "IsSpriteSheetSample", False) == True
+        elif HasIGOUserData:
+            IsGameObject = GetUserData(obj, "IsGameObject", False) == True
+        else:
+            UserDataValues = build_user_data_map(obj, ["GAME PROPERTIES"])
+            if "IsSpriteSheetSample" in UserDataValues:
+                IsSpriteSheetSample = UserDataValues["IsSpriteSheetSample"] == True
+            elif "IsGameObject" in UserDataValues:
+                IsGameObject = UserDataValues["IsGameObject"] == True
 
-    elif((GetUserData(obj, "IsGameObject", False)) == True):
-        PreDefineGameObject(obj, obj_node, doc)
+        #Images inside containers
+        if IsSpriteSheetSample:
+            PreDefineImage(obj, obj_node, doc)
+        #Game Objects
+        elif IsGameObject:
+            PreDefineGameObject(obj, obj_node, doc)
 
 
 def parse_objects(obj, parent_node, GenerateNode, doc, indent=0, Cached=False):
@@ -1364,66 +1407,89 @@ def parse_objects(obj, parent_node, GenerateNode, doc, indent=0, Cached=False):
         parent_node.text = '\n' + ' ' * indent
         PassNode.tail = '\n' + ' ' * indent
 
-#doc = c4d.documents.GetActiveDocument()
-#def update_doc():
-    #global doc
-    #doc = c4d.documents.GetActiveDocument()
-
-def main(doc):
-    global Root
-    #global doc 
-    #update_doc()
-    global LocalID
-    LocalID = -1
-
-    c4d.EventAdd()
-
-    Root = doc.SearchObject('LANDS OF OBLIVION')
-
-    if Root is None:
-        c4d.gui.MessageDialog("Root of the Level Region not found. A null object with name LANDS OF OBLIVION should exist in the scene")
-        return
-    
-    RegionName = Root.GetName().replace(" ", "")
-
-    global LevelSite
-    LevelSite = search_for_object_withPrefix("LevelSite", Root.GetDown())
-    obj = LevelSite
-
+def process_level_site(obj, save_path, doc):
+    """
+    Processa um objeto LevelSite e salva em um arquivo XML separado.
+    """
     if obj is not None:
-        Name =  'Site' + obj.GetName().split('.')[1].replace(" ", "")
-
-        XMLFileName = RegionName + '_' + Name + '.xml'
-        #print ('XML File Name: ', XMLFileName)
-
-        # Create a new XML tree and root node
+        region_name = obj.GetUp().GetName().replace(" ", "")
+        siteName = obj.GetName().split('.')[1].replace(" ", "")
+        xml_file_name = os.path.join(save_path, f"{region_name}_Site{siteName}.xml")
+        
         root = ET.Element('LevelSite')
         root.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
-        root.set('siteName', obj.GetName().split('.')[1])
-        root.set('siteID', str(int(GetUserData(obj,  "siteID"))))
-
+        root.set('siteName', siteName)
+        root.set('siteID', str(int(GetUserData(obj, "siteID"))))
+        
         now = datetime.now()
         date_string = now.strftime("%Y-%m-%d %H:%M:%S")
-        VersionString = "C4D_" + date_string
-        root.set('Version', VersionString)
+        version_string = "C4D_" + date_string
+        root.set('Version', version_string)
+        
+        parse_objects(obj, root, False, doc, 2)
+        
+        tree = ET.ElementTree(root)
+        tree.write(xml_file_name, encoding='utf-8', xml_declaration=False)
+        print(f"Exportação concluída! Arquivo salvo: {xml_file_name}")
 
-    # Ask the user to choose where to save the file
-    save_path = c4d.storage.SaveDialog(def_path=XMLFileName)
+def process_level_background(obj, save_path, doc):
+    """
+    Processa um objeto LevelBackground e salva em um arquivo XML separado.
+    """
+    if obj is not None:
+        region_name = obj.GetUp().GetName().replace(" ", "")
+        bgID = obj.GetName().split('.')[1].replace(" ", "")
+        bgName = obj.GetName().split('.')[2]
+        xml_file_name = os.path.join(save_path, f"{region_name}_BG{bgID}.xml")
+        
+        root = ET.Element('LevelBackground')
+        root.set('regionName', GetUserData(obj, "regionName").replace(" ", "_"))
+        root.set('name', bgName)
+        root.set('globalId', str(int(GetUserData(obj, "globalId"))))
+        root.set('x', str(obj.GetAbsPos().x))
+        root.set('y', str(-obj.GetAbsPos().y))
+      
+        now = datetime.now()
+        date_string = now.strftime("%Y-%m-%d %H:%M:%S")
+        version_string = "C4D_" + date_string
+        root.set('Version', version_string)
+      
+        parse_objects(obj, root, False, doc, 2)
+        
+        tree = ET.ElementTree(root)
+        tree.write(xml_file_name, encoding='utf-8', xml_declaration=False)
+        print(f"Exportação concluída! Arquivo salvo: {xml_file_name}")
+            
 
-    # Parse through all children of the active object
-    parse_objects(obj, root, False, doc, 2)
-    print("Finished Parsing")
-
-    # Write the XML tree to a file
-    tree = ET.ElementTree(root)
-
-    if save_path:
-        tree.write(save_path, encoding='utf-8', xml_declaration=False)
-        print("Done!!!!")
-        c4d.gui.MessageDialog("Export successful! File saved to: " + save_path)
-
+def main(doc):
+    """
+    Função principal que gerencia a exportação do LevelSite e do LevelBackground.
+    """
     global globalIDs    
-    globalIDs = {} #reset globalIDs
-
+    globalIDs = {}  # Resetando os IDs globais
+    
+    c4d.EventAdd()
+    
+    root = doc.SearchObject('LANDS OF OBLIVION')
+    if root is None:
+        c4d.gui.MessageDialog("Raiz da Região de Nível não encontrada. Um objeto nulo chamado LANDS OF OBLIVION deve existir na cena")
+        return
+    
+    # Pergunta apenas uma vez onde salvar os arquivos
+    save_path = c4d.storage.LoadDialog(title="Escolha a pasta para salvar os XMLs", flags=c4d.FILESELECT_DIRECTORY)
+    if not save_path:
+        return
+    
+    # Processa o LevelSite
+    level_site = search_for_object_withPrefix("LevelSite", root.GetDown())
+    process_level_site(level_site, save_path, doc)
+    
+    # Processa o LevelBackground
+    level_background = search_for_object_withPrefix("LevelBackground", root.GetDown())
+    process_level_background(level_background, save_path, doc)
+  
+    c4d.gui.MessageDialog(f"Exportação bem-sucedida! Arquivos salvos em: {save_path}")
+  
+    globalIDs = {}  # Resetando os IDs globais
     global total_digits
     total_digits = 0
