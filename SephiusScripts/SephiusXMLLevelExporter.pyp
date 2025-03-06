@@ -1412,7 +1412,7 @@ def process_level_site(obj, save_path, doc):
     Processa um objeto LevelSite e salva em um arquivo XML separado.
     """
     if obj is not None:
-        region_name = obj.GetUp().GetName().replace(" ", "")
+        region_name = obj.GetUp().GetName().replace(" ", "_")
         siteName = obj.GetName().split('.')[1].replace(" ", "")
         xml_file_name = os.path.join(save_path, f"{region_name}_Site{siteName}.xml")
         
