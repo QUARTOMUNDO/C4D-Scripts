@@ -1437,7 +1437,7 @@ def process_level_background(obj, save_path, doc):
     Processa um objeto LevelBackground e salva em um arquivo XML separado.
     """
     if obj is not None:
-        region_name = obj.GetUp().GetName().replace(" ", "")
+        region_name = obj.GetUp().GetName().replace(" ", "_")
         bgID = obj.GetName().split('.')[1].replace(" ", "")
         bgName = obj.GetName().split('.')[2]
         xml_file_name = os.path.join(save_path, f"{region_name}_BG{bgID}.xml")
