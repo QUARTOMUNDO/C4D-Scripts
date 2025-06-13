@@ -1470,7 +1470,13 @@ def main(doc):
     
     c4d.EventAdd()
     
-    root = doc.SearchObject('LANDS OF OBLIVION')
+    # Show a dialog to let the user choose the object name
+    object_name = c4d.gui.InputDialog("Enter the root object name:", "LANDS OF OBLIVION")
+    if not object_name:
+        c4d.gui.MessageDialog("No object name provided. Using default 'LANDS OF OBLIVION'")
+        object_name = "LANDS OF OBLIVION"
+    
+    root = doc.SearchObject(object_name)
     if root is None:
         c4d.gui.MessageDialog("Raiz da Região de Nível não encontrada. Um objeto nulo chamado LANDS OF OBLIVION deve existir na cena")
         return

@@ -76,6 +76,28 @@ def indent(elem, level=0):
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
 
+def generate_prefix_from_name(object_name):
+    """Generate a prefix by taking the first letter of each word separated by underscores."""
+    if not object_name:
+        return "LoO"  # Default fallback
+    
+    # Split by underscores and get first letter of each part
+    parts = object_name.split("_")
+    letters = [part[0] for part in parts if part]
+    
+    if not letters:
+        return "LoO"  # Fallback if somehow empty
+    
+    # Make first and last letters uppercase, middle letters lowercase
+    if len(letters) == 1:
+        prefix = letters[0].upper()
+    elif len(letters) == 2:
+        prefix = letters[0].upper() + letters[1].upper()
+    else:
+        prefix = letters[0].upper() + "".join([letter.lower() for letter in letters[1:-1]]) + letters[-1].upper()
+    
+    return prefix
+
 def generate_unique_colors(unique_values):
     """Gera um dicionário de cores RGB únicas para cada valor do mapa."""
     random.seed(42)  
@@ -91,9 +113,12 @@ def generate_unique_colors(unique_values):
 
     return {value: random_color() for value in unique_values}
 
-def save_colored_texture(map_name, data, width, height, texture_directory):
+def save_colored_texture(map_name, data, width, height, texture_directory, object_name):
     """Cria e salva a versão colorida do mapa onde cada valor recebe uma cor aleatória."""
     print(f"Generating colored texture for {map_name}...")
+
+    # Generate prefix from object name
+    prefix = generate_prefix_from_name(object_name)
 
     # Identificar valores únicos no mapa
     unique_values = set(round(value * 100) for value in data)
@@ -118,7 +143,7 @@ def save_colored_texture(map_name, data, width, height, texture_directory):
             bmp.SetPixel(j, i, r, g, b)
 
     # Salvar PNG colorido
-    png_filename = f"LoO{map_name}Colored.png"
+    png_filename = f"{prefix}{map_name}Colored.png"
     png_path = os.path.join(texture_directory, png_filename)
     result = bmp.Save(png_path, c4d.FILTER_PNG, None)
     
@@ -128,7 +153,7 @@ def save_colored_texture(map_name, data, width, height, texture_directory):
         print(f"Failed to save {png_filename}")
 
     # Criar e salvar XML externo (somente referência ao PNG)
-    xml_filename = f"LoO{map_name}Colored.xml"
+    xml_filename = f"{prefix}{map_name}Colored.xml"
     xml_path = os.path.join(texture_directory, xml_filename)
 
     xml_root = ET.Element("TextureAtlas", {
@@ -150,13 +175,16 @@ def save_colored_texture(map_name, data, width, height, texture_directory):
     print(f"Saved {xml_filename} at {xml_path}")
 
 
-def save_texture_and_xml(map_name, map_object, map_cache, texture_directory, main_root):
+def save_texture_and_xml(map_name, map_object, map_cache, texture_directory, main_root, object_name):
     """Gera o mapa de texturas e o XML correspondente para uso externo"""
     if not map_object:
         print(f"{map_name} not found.")
         return
 
     global save_path
+
+    # Generate prefix from object name
+    prefix = generate_prefix_from_name(object_name)
 
     map_width = map_object[c4d.PRIM_PLANE_SUBW]
     map_height = map_object[c4d.PRIM_PLANE_SUBH]
@@ -170,7 +198,7 @@ def save_texture_and_xml(map_name, map_object, map_cache, texture_directory, mai
     position_y = -map_cache.GetMg().off.y - (half_height * scale_y)
 
     # Salvar PNG
-    png_filename = f"LoO{map_name}.png"
+    png_filename = f"{prefix}{map_name}.png"
     png_path = os.path.join(texture_directory, png_filename)
     bin_directory = os.path.abspath(os.path.join(os.path.dirname(save_path), "../.."))
     relative_png_path = os.path.relpath(png_path, bin_directory)
@@ -178,7 +206,7 @@ def save_texture_and_xml(map_name, map_object, map_cache, texture_directory, mai
     # Criar nó dentro do XML principal
     map_root = ET.SubElement(main_root, map_name, {
         "numberOfColors": "256" if "Area" in map_name else "1",
-        "dataName": str(f"LoO{map_name}"),
+        "dataName": str(f"{prefix}{map_name}"),
         "scaleX": str(scale_x),
         "scaleY": str(scale_y),
         "positionX": str(position_x),
@@ -213,7 +241,7 @@ def save_texture_and_xml(map_name, map_object, map_cache, texture_directory, mai
         print(f"Failed to save {png_filename}")
 
     # Criar e salvar XML externo (somente referência ao PNG)
-    xml_filename = f"LoO{map_name}.xml"
+    xml_filename = f"{prefix}{map_name}.xml"
     xml_path = os.path.join(texture_directory, xml_filename)
     
     xml_root = ET.Element("TextureAtlas", {
@@ -236,10 +264,16 @@ def save_texture_and_xml(map_name, map_object, map_cache, texture_directory, mai
 
     # Criar versão alternativa colorida para AreaMap
     if "Area" in map_name or "BG" in map_name:
-        save_colored_texture(map_name, data, map_width, map_height, texture_directory)
+        save_colored_texture(map_name, data, map_width, map_height, texture_directory, object_name)
 
 def main(doc) -> None:
-    XMLFileName = "LANDS_OF_OBLIVION_Maps.xml"
+    # Show a dialog to let the user choose the object name
+    object_name = c4d.gui.InputDialog("Enter the desired Region name:", "LANDS OF OBLIVION")
+    if not object_name:
+        c4d.gui.MessageDialog("No object name provided. Using default 'LANDS OF OBLIVION'")
+        object_name = "LANDS_OF_OBLIVION"
+
+    XMLFileName = object_name.replace(" ", "_") + "_Maps.xml"
     global save_path
     save_path = c4d.storage.SaveDialog(def_path=XMLFileName)
 
@@ -251,23 +285,23 @@ def main(doc) -> None:
     os.makedirs(texture_directory, exist_ok=True)
 
     root = ET.Element("AreaMaps")
-    root.attrib = {"regionName": "LANDS_OF_OBLIVION"}
+    root.attrib = {"regionName": object_name}
 
     # Gerar mapas de textura e XML para AreaMap e LumaMap
     area_map = doc.SearchObject("AreaMap")
     if area_map:
         area_map_cache = area_map.GetCache()
-        save_texture_and_xml("AreaMap", area_map, area_map_cache, texture_directory, root)
+        save_texture_and_xml("AreaMap", area_map, area_map_cache, texture_directory, root, object_name)
 
     luma_map = doc.SearchObject("LumaMap")
     if luma_map:
         luma_map_cache = luma_map.GetCache()
-        save_texture_and_xml("LumaMap", luma_map, luma_map_cache, texture_directory, root)
+        save_texture_and_xml("LumaMap", luma_map, luma_map_cache, texture_directory, root, object_name)
    
     bg_map = doc.SearchObject("BGMap")
     if bg_map:
         bg_map_cache = bg_map.GetCache()
-        save_texture_and_xml("BGMap", bg_map, bg_map_cache, texture_directory, root)
+        save_texture_and_xml("BGMap", bg_map, bg_map_cache, texture_directory, root, object_name)
    
     # **Adicionar Site Maps ao XML**
     site_maps_root = ET.SubElement(root, "SiteMaps")
@@ -275,9 +309,34 @@ def main(doc) -> None:
     current_map_piece = site_maps_container.GetDown() if site_maps_container else None
 
     while current_map_piece:
-        map_type = current_map_piece.GetName().split("_")[0]
-        site_name = current_map_piece.GetName().split("_")[1]
-        sub_id = current_map_piece.GetName().split("_")[2] if len(current_map_piece.GetName().split("_")) > 2 else ""
+        # Get the MapLocation user data tag
+        map_location_tag = None
+        for tag in current_map_piece.GetTags():
+            if tag.GetName() == "MapLocation":
+                map_location_tag = tag
+            break
+        
+        if map_location_tag:
+            # Get properties from user data by name
+            bc = map_location_tag.GetUserDataContainer()
+            map_type = ""
+            sub_id = ""
+            site_name = ""
+            
+            # Search through user data to find properties by name
+            for desc_id, bc_data in bc:
+                if bc_data[c4d.DESC_NAME] == "typeID":
+                    map_type = map_location_tag[desc_id] if map_location_tag[desc_id] else ""
+                elif bc_data[c4d.DESC_NAME] == "subTypeID":
+                    sub_id = map_location_tag[desc_id] if map_location_tag[desc_id] else ""
+                elif bc_data[c4d.DESC_NAME] == "globalID":
+                    site_name = map_location_tag[desc_id] if map_location_tag[desc_id] else ""
+        else:
+            # Fallback to name parsing if tag not found
+            name_parts = current_map_piece.GetName().split("_")
+            map_type = name_parts[0] if len(name_parts) > 0 else ""
+            site_name = name_parts[1] if len(name_parts) > 1 else ""
+            sub_id = name_parts[2] if len(name_parts) > 2 else ""
 
         site_map_location_node = ET.SubElement(site_maps_root, "MapLocation", {
             "siteName": site_name,
@@ -286,13 +345,33 @@ def main(doc) -> None:
             "scaleY": str(current_map_piece[c4d.ID_BASEOBJECT_REL_SCALE, c4d.VECTOR_Y]),
             "positionX": str(current_map_piece[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_X]),
             "positionY": str(-current_map_piece[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_Y]),
-            "className": map_type
+            "typeID": map_type
         })
 
         sub_map_piece = current_map_piece.GetDown()
         while sub_map_piece:
+            # Get the MapLocation user data tag for sub pieces
+            sub_map_location_tag = None
+            for tag in sub_map_piece.GetTags():
+                if tag.GetName() == "MapLocation":
+                    sub_map_location_tag = tag
+                    break
+            
+            if sub_map_location_tag:
+                bc = sub_map_location_tag.GetUserDataContainer()
+                piece_id = ""
+                
+                # Search for subTypeID property by name
+                for desc_id, bc_data in bc:
+                    if bc_data[c4d.DESC_NAME] == "subTypeID":
+                        piece_id = sub_map_location_tag[desc_id] if sub_map_location_tag[desc_id] else ""
+                        break
+            else:
+                # Fallback to name parsing
+                piece_id = sub_map_piece.GetName().split("_")[2] if len(sub_map_piece.GetName().split("_")) > 2 else ""
+
             ET.SubElement(site_map_location_node, "SiteMapPiece", {
-                "pieceID": sub_map_piece.GetName().split("_")[2] if len(sub_map_piece.GetName().split("_")) > 2 else "",
+                "pieceID": piece_id,
                 "scaleX": str(sub_map_piece[c4d.ID_BASEOBJECT_REL_SCALE, c4d.VECTOR_X]),
                 "scaleY": str(sub_map_piece[c4d.ID_BASEOBJECT_REL_SCALE, c4d.VECTOR_Y]),
                 "positionX": str(sub_map_piece[c4d.ID_BASEOBJECT_REL_POSITION, c4d.VECTOR_X]),
