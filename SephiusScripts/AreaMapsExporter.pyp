@@ -81,9 +81,12 @@ def generate_prefix_from_name(object_name):
     if not object_name:
         return "LoO"  # Default fallback
     
+    print(f"Generating prefix from object name: {object_name}")
     # Split by underscores and get first letter of each part
-    parts = object_name.split("_")
+    parts = object_name.split(" ")
     letters = [part[0] for part in parts if part]
+
+    print(f"Extracted letters: {letters}")
     
     if not letters:
         return "LoO"  # Fallback if somehow empty
@@ -96,6 +99,14 @@ def generate_prefix_from_name(object_name):
     else:
         prefix = letters[0].upper() + "".join([letter.lower() for letter in letters[1:-1]]) + letters[-1].upper()
     
+    print(f"Generated prefix: {prefix}")
+    
+    # Ensure prefix is at least 3 characters long
+    if len(prefix) < 2:
+        prefix = prefix + "-"  # Default fallback if prefix is too short
+    elif len(prefix) < 3:
+        prefix = prefix + "--"
+
     return prefix
 
 def generate_unique_colors(unique_values):
@@ -272,6 +283,8 @@ def main(doc) -> None:
     if not object_name:
         c4d.gui.MessageDialog("No object name provided. Using default 'LANDS OF OBLIVION'")
         object_name = "LANDS_OF_OBLIVION"
+
+    print(f"Object name provided: {object_name}")
 
     XMLFileName = object_name.replace(" ", "_") + "_Maps.xml"
     global save_path
