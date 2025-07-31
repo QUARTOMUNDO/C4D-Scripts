@@ -777,6 +777,7 @@ def PreDefineGameSprite(obj, obj_node, doc):
     ObjectName = obj.GetName()
 
     obj_node.set('name',  ObjectName)
+    obj_node.set('className',  GetUserData(obj, "className"))
     obj_node.set('group',  str(getGroupByParent(obj)))
 
     #obj_node.set('parentAreaID',  ToIntStr(GetUserData(obj, "parentAreaID", False)))
@@ -1275,7 +1276,7 @@ def ShouldGenerateNode(obj):
         return True
     elif(ObjectID == "LevelBackground"):
         return True
-    elif(ObjectID == "GameSprite"):
+    elif ObjectID in ["GameSprite", "GameEffect"]:
         return True
     elif ObjectID in ["LevelCollision", "DamageCollision"]:
         return True
@@ -1320,7 +1321,7 @@ def PreDefineObjectType(obj, obj_node, doc, indent):
         PreDefineBoxCollision(obj, obj_node, doc)
     elif(ObjectID == "RawShape"):
         PreDefineRawCollision(obj, obj_node, doc)
-    elif(ObjectID == "GameSprite"):
+    elif ObjectID in ["GameSprite", "GameEffect"]:
         PreDefineGameSprite(obj, obj_node, doc)
     elif ObjectID in ["AnimationContainer", "SpriteContainer", "QuadBatchContainer"]:
         PreDefineContainer(obj, obj_node, doc)
