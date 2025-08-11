@@ -880,7 +880,7 @@ def PreDefineImage(obj, obj_node, doc):
 
     #fixing code. Fix objects with wrong/none sample reference
     if SampleReference is None or SampleReference == obj:
-        print("Sample Reference is NONE", " Trying to get it")
+        print("Sample Reference is NONE", " Trying to get it", obj.GetName())
         MissingSampleName = obj.GetName()
         MissingSampleName = MissingSampleName.split("_")
         MissingSampleName = MissingSampleName[0] + "_" + MissingSampleName[1] + "_Sample"
