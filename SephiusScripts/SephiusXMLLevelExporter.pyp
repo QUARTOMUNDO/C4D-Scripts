@@ -128,20 +128,24 @@ def search_for_object(name, obj):
     return None
 
 def search_for_object_withPrefix(Prefix, obj):
+    if obj is None:
+        raise ValueError("First Parent Object is Null [Prefix]: " + Prefix)
+    
+    srcObject = obj
     """
     Search for a child object with a specific prefix name.
     :param name: the name of the object to search for.
     :param obj: the current object in the hierarchy.
     :return: the object if found, else None.
     """
-    while obj:
-        #print(Prefix, obj.GetName())
-        if obj.GetName().split('.')[0] in (Prefix):
-            return obj
+    while srcObject:
+        #print(Prefix, srcObject.GetName())
+        if srcObject.GetName().split('.')[0] in (Prefix):
+            return srcObject
 
-        obj = obj.GetNext()
-
-    raise ValueError("No Valid Level Site exist. We expect a null wth name 'LevelSite.[SiteName]'")
+        srcObject = srcObject.GetNext()
+    
+    raise ValueError("Prefix not found: " + Prefix, "FirstObject" + obj.GetName())
     return None
 
 def update_user_data(obj, param_name, value):
@@ -1488,10 +1492,12 @@ def main(doc):
         return
     
     # Processa o LevelSite
-    level_site = search_for_object_withPrefix("LevelSite", root.GetDown())
+    print("Processing Level Site", root.GetName(), root.GetDown())
+    level_site = search_for_object_withPrefix("LevelSite",root.GetDown())
     process_level_site(level_site, save_path, doc)
     
     # Processa o LevelBackground
+    print("Processing Level Background", root.GetName(), root.GetDown())
     level_background = search_for_object_withPrefix("LevelBackground", root.GetDown())
     process_level_background(level_background, save_path, doc)
   
